@@ -39,10 +39,10 @@ def create_mask(sub_domain, domain, dims, spacings, domain_rounding_type=None):
         hi_tmp = (d_sub[i][1] - d[i][0]) / dx
         if domain_rounding_type is None:
             lo = int(np.around(lo_tmp))
-            if abs(lo - lo_tmp) / abs(lo_tmp) > EPS:
+            if abs(lo - lo_tmp) > EPS:
                 raise RuntimeError
             hi = int(np.around(hi_tmp))
-            if abs(hi - hi_tmp) / abs(hi_tmp) > EPS:
+            if abs(hi - hi_tmp) > EPS:
                 raise RuntimeError
         elif domain_rounding_type == 'expand':
             lo = int(np.floor(lo_tmp))

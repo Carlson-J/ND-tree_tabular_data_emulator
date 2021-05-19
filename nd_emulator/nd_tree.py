@@ -1,5 +1,6 @@
 import numpy as np
 from .model_classes import fit_nd_linear_model, nd_linear_model
+from .mask import create_mask
 
 
 def compute_ranges(domain, spacing, dims):
@@ -9,7 +10,7 @@ def compute_ranges(domain, spacing, dims):
             dimension.
     :param spacing: (list) The spacing, either 'linear' or 'log', of each dimension, e.g., ['linear', 'linear', 'log']
     :param dims: [(int),...,(int)] the number of elements in each dimension
-    :return:
+    :return: (list) a list of arrays that hold the point locations along the axis corresponding to the index in the list
     """
     ranges = []
     for i in range(len(dims)):
@@ -20,6 +21,38 @@ def compute_ranges(domain, spacing, dims):
         else:
             raise ValueError(f"spacing type '{spacing[i]}' unknown")
     return ranges
+
+def create_children_nodes(node):
+    """
+    Add D more children nodes to the current node, where D is the number of dims
+    :param node: {
+            'domain'
+            'children'
+            'id'
+            'model'
+            'mask'
+            'error'
+        }
+    :return: None
+    """
+    num_dims = len(node['domain'])
+    assert node['children'] is None
+    # add children nodes
+    node['children'] = []
+    for i in range(2**num_dims):
+        # define new domain
+        # TODO find new mask, we need to include dims in the node.
+        new_node = {
+            'domain': domain,
+            'children': None,
+            'id': '0',
+            'model': None,
+            'mask': create_mask(domain, domain, dims, spacing),
+            'error': None
+        }
+
+
+
 
 
 class ND_Tree:
@@ -63,7 +96,7 @@ class ND_Tree:
             'children': None,
             'id': '0',
             'model': None,
-            'mask': None,
+            'mask': create_mask(domain, domain, dims, spacing),
             'error': None
         }
         # save parameters
@@ -72,16 +105,24 @@ class ND_Tree:
         self.dims = dims
         self.error_threshold = error_threshold
         self.model_classes = model_classes
+        self.domain_spacings = compute_ranges(domain, spacing, dims)
+        self.data = data
 
         # Train emulator
-        self.refine_region()
+        self.refine_region(self.tree)
 
-    def refine_region(self):
+    def refine_region(self, node):
 
         # train region
-
+        fit, error = self.fit_region(node)
 
         # check error and depth
+        if error >= self.error_threshold:
+            # create children nodes
+            create_children_nodes(node)
+            # refine children nodes
+            for i in range(len(self.dims)):
+                self.refine_region(node['children'][i])
         return
 
     def fit_region(self, node):
@@ -98,8 +139,11 @@ class ND_Tree:
         for model_class in self.model_classes:
             if model_class['type'] == 'nd-linear':
                 # fit model
-                # X = np.array([[self.]])
-                fit = fit_nd_linear_model()
+                X = np.zeros([2, len(self.dims)])
+                for i in range(len(self.dims)):
+                    X[0, i] = self.domain_spacings[node['mask'][i]][0]
+                    X[1, i] = self.domain_spacings[node['mask'][i]][-1]
+                fit = fit_nd_linear_model(self.data[node['mask']], X)
                 # compute error
         #         f_interp =
         #

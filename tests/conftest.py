@@ -1,14 +1,16 @@
 import pytest
 import numpy as np
+from nd_emulator.mask import create_mask
 
 
 @pytest.fixture
 def dataset_2d():
-    # Create a 2D grid spaced in log and linear space
-    Nx0 = 2**3 + 1
-    x0 = np.linspace(0, 1, Nx0)
-    Nx1 = 2**4 + 1
-    x1 = np.logspace(0, 1, Nx1)
+    # Create a 2D grid spaced in linear space
+    domain = [[0, 1], [0, 1]]   # don't change this or it will break tests
+    dims = [2**3 + 1, 2**4 + 1]
+    spacing = ['linear', 'linear']
+    x0 = np.linspace(domain[0][0], domain[0][1], dims[0])
+    x1 = np.linspace(domain[1][0], domain[1][1], dims[1])
     X0, X1 = np.meshgrid(x0, x1)
 
     return {
@@ -16,4 +18,18 @@ def dataset_2d():
         'df_x0': X1,
         'df_x1': X0,
         'df_x0_x1': np.ones_like(X1)
-    }
+    }, domain, dims, spacing
+
+
+@pytest.fixture
+def default_root_node_2d(dataset_2d):
+    F, domain, dims, spacing = dataset_2d
+    return {
+            'domain': domain,
+            'children': None,
+            'id': '0',
+            'model': None,
+            'mask': create_mask(domain, domain, dims, spacing),
+            'error': None
+        }
+
