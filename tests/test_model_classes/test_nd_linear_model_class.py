@@ -41,7 +41,7 @@ def test_nd_linear_model_class_2d():
     x = np.array([0.5, -1.5])
     F_TRUE = -0.5
 
-    f_interp = nd_linear_model(weights, x)
+    f_interp = nd_linear_model(weights, x)[0]
 
     assert (abs(f_interp - F_TRUE) <= EPS)
 
@@ -80,7 +80,7 @@ def test_nd_linear_model_class_8d():
     f_true = np.array([f(X[i, :]) for i in range(NUM_TEST_POINTS)])
 
     # do interpolation at points
-    f_interp = np.array([nd_linear_model(weights, X[i, :]) for i in range(NUM_TEST_POINTS)])
+    f_interp = nd_linear_model(weights, X)
 
     # check that they are correct
     assert (np.all(abs(f_interp - f_true) <= EPS))

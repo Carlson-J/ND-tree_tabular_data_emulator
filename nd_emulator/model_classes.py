@@ -24,27 +24,30 @@ def fit_nd_linear_model(F, X):
 
 
 @jit(nopython=True)
-def nd_linear_model(weights, x):
+def nd_linear_model(weights, X):
     """
-    do an ND-linear interpolation at the point x given model weight values.
+    do an ND-linear interpolation at the points in X given model weight values.
     https://math.stackexchange.com/a/1342377
     :param weights:[f_0...0, f_10...0, f_010..0, ..., f_1...1, x0_0..0, x1_0...0, ..., xN_0...0, x0_1...1,
         ..., xN_1...1]
-    :param x: (array) Point to interpolate at. We assume x and weights are in correct format
+    :param X: (2d array) Points to interpolate at. We assume x and weights are in correct format. Each row is
+        a different point.
     :return:
     """
-    dims = len(x)
-    # transform x based on domain of hypercube
-    x = (x - weights[2 ** dims:2 ** dims + dims]) / (
-                weights[2 ** dims + dims:2 ** dims + 2 * dims] - weights[2 ** dims:2 ** dims + dims])
-    # iterate over each corner of hypercube
-    sol = 0
-    for i in range(2 ** dims):
-        w = 1
-        # get weight for corner
-        for j in range(dims):
-            # get binary index of current corner
-            bit = (i >> j) & 1
-            w *= 1 - x[j] if bit == 0 else x[j]
-        sol += weights[i] * w
+    X = np.atleast_2d(X)
+    dims = int(len(X[0, :]))
+    sol = np.zeros_like(X[:, 0], dtype=np.float64)
+    for k, x in enumerate(X):
+        # transform x based on domain of hypercube
+        x = (x - weights[2 ** dims:2 ** dims + dims]) / (
+                    weights[2 ** dims + dims:2 ** dims + 2 * dims] - weights[2 ** dims:2 ** dims + dims])
+        # iterate over each corner of hypercube
+        for i in range(2 ** dims):
+            w = 1
+            # get weight for corner
+            for j in range(dims):
+                # get binary index of current corner
+                bit = (i >> j) & 1
+                w *= 1 - x[j] if bit == 0 else x[j]
+            sol[k] += weights[i] * w
     return sol
