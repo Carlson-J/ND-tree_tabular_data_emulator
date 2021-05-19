@@ -1,4 +1,25 @@
 import numpy as np
+from .model_classes import fit_nd_linear_model, nd_linear_model
+
+
+def compute_ranges(domain, spacing, dims):
+    """
+    Create an array for each axis that contains the intervals along that axis
+    :param domain:  (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
+            dimension.
+    :param spacing: (list) The spacing, either 'linear' or 'log', of each dimension, e.g., ['linear', 'linear', 'log']
+    :param dims: [(int),...,(int)] the number of elements in each dimension
+    :return:
+    """
+    ranges = []
+    for i in range(len(dims)):
+        if spacing[i] == 'linear':
+            ranges.append(np.linspace(domain[i][0], domain[i][1], dims[i]))
+        elif spacing[i] == 'log':
+            ranges.append(np.logspace(np.log10(domain[i][0]), np.log10(domain[i][1]), dims[i]))
+        else:
+            raise ValueError(f"spacing type '{spacing[i]}' unknown")
+    return ranges
 
 
 class ND_Tree:
@@ -17,7 +38,7 @@ class ND_Tree:
         :param max_depth: (int) maximum depth the tree should be able to go
         :param domain: (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
             dimension.
-        :param dims: (int) the number of dimensions
+        :param dims: [(int),...,(int)] the number of elements in each dimension
         :param spacing: (list) The spacing, either 'linear' or 'log', of each dimension, e.g., ['linear', 'linear', 'log']
         :param model_classes: (list of dicts) list of model classes to use when training. Each entry should have the
             form {  'type': (string),
@@ -27,11 +48,11 @@ class ND_Tree:
         """
         # check that data is correct format
         assert (type(data['f']) is np.ndarray)
-        assert (dims == data['f'].ndim)
+        assert (len(dims) == data['f'].ndim)
         for key in data:
             assert (data[key].shape == data['f'].shape)
         # check if each element is it is a power of 2 after removing 1
-        for n in range(dims):
+        for n in range(len(dims)):
             a = data['f'].shape[n] - 1
             # (https://stackoverflow.com/questions/57025836/how-to-check-if-a-given-number-is-a-power-of-two)
             assert ((a & (a - 1) == 0) and a != 0)
@@ -74,8 +95,13 @@ class ND_Tree:
         best_fit = None
         assert (len(self.model_classes) > 0)
         # try each model class to which gives the lowest predicted error
-        # for model_class in self.model_classes:
-        #
+        for model_class in self.model_classes:
+            if model_class['type'] == 'nd-linear':
+                # fit model
+                # X = np.array([[self.]])
+                fit = fit_nd_linear_model()
+                # compute error
+        #         f_interp =
         #
         #
         #     # check if log space model class
