@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def create_mask(sub_domain, domain, dims, transforms, domain_rounding_type=None):
+def create_mask(sub_domain, domain, dims, spacings, domain_rounding_type=None):
     """
             A mask for nd data. It is assumed that the data is evenly spaced after the transform has been done.
             :param sub_domain: (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
@@ -9,26 +9,25 @@ def create_mask(sub_domain, domain, dims, transforms, domain_rounding_type=None)
             :param domain: (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
                 dimension for the full domain.
             :param dims: (list) the number of elements along each axis of the data matrix
-            :param transforms: (list) of transforms to perform to make domain an evenly spaced grid of points. Each entry
-                corresponds to the corresponding dimension.
+            :param spacings: (list) how the points are spaced in each dimension.
             :param domain_rounding_type: [None, 'expand', 'contract'] How to handle subdomains that do not line up with
                 points. expand will round the index to the extreme and contract will do the opposite.
             """
     EPS = 10 ** -10
     # Make sure the sub-domain is within the original domain
-    assert (len(domain) == len(sub_domain) and len(domain) == len(transforms) and len(domain) == len(dims))
-    num_dims = len(transforms)
+    assert (len(domain) == len(sub_domain) and len(domain) == len(spacings) and len(domain) == len(dims))
+    num_dims = len(spacings)
     for i in range(num_dims):
         assert (domain[i][0] <= sub_domain[i][0] and domain[i][1] >= sub_domain[i][1])
 
-    # do needed transforms
+    # do needed spacings
     d = domain.copy()
     d_sub = sub_domain.copy()
     for i in range(num_dims):
-        if transforms[i] is None:
+        if spacings[i] ==  'linear':
             continue
-        elif transforms[i] == 'log':
-            assert (domain[i] > 0)
+        elif spacings[i] == 'log':
+            assert (np.all(np.array(domain[i]) > 0))
             d[i] = np.log10(domain[i])
             d_sub[i] = np.log10(sub_domain[i])
 
