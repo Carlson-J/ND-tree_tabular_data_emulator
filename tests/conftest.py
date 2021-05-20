@@ -11,25 +11,56 @@ def dataset_2d():
     spacing = ['linear', 'linear']
     x0 = np.linspace(domain[0][0], domain[0][1], dims[0])
     x1 = np.linspace(domain[1][0], domain[1][1], dims[1])
-    X0, X1 = np.meshgrid(x0, x1)
+    X0, X1 = np.meshgrid(x0, x1, indexing='ij')
 
     return {
         'f': X0*X1,
         'df_x0': X1,
         'df_x1': X0,
         'df_x0_x1': np.ones_like(X1)
-    }, domain, dims, spacing
+    }, domain, spacing
+
+
+@pytest.fixture
+def dataset_2d_log():
+    # Create a 2D grid spaced in linear space
+    domain = [[0, 1], [1e-0, 1e1]]   # don't change this or it will break tests
+    dims = [2**3 + 1, 2**4 + 1]
+    spacing = ['linear', 'log']
+    x0 = np.linspace(domain[0][0], domain[0][1], dims[0])
+    x1 = np.logspace(np.log10(domain[1][0]), np.log10(domain[1][1]), dims[1])
+    X0, X1 = np.meshgrid(x0, x1, indexing='ij')
+
+    return {
+        'f': X0*X1,
+        'df_x0': X1,
+        'df_x1': X0,
+        'df_x0_x1': np.ones_like(X1)
+    }, domain, spacing
 
 
 @pytest.fixture
 def default_root_node_2d(dataset_2d):
-    F, domain, dims, spacing = dataset_2d
+    F, domain, spacing = dataset_2d
     return {
             'domain': domain,
             'children': None,
-            'id': '0',
+            'id': [0],
             'model': None,
-            'mask': create_mask(domain, domain, dims, spacing),
+            'mask': create_mask(domain, domain, F['f'].shape, spacing),
             'error': None
         }
+
+
+@pytest.fixture
+def default_root_node_2d_log(dataset_2d_log):
+    F, domain, spacing = dataset_2d_log
+    return {
+            'domain': domain,
+            'children': None,
+            'id': [0],
+            'model': None,
+            'mask': create_mask(domain, domain, F['f'].shape, spacing),
+            'error': None
+        }, spacing
 
