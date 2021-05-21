@@ -24,7 +24,7 @@ def create_mask(sub_domain, domain, dims, spacings, domain_rounding_type=None):
     d = domain.copy()
     d_sub = sub_domain.copy()
     for i in range(num_dims):
-        if spacings[i] ==  'linear':
+        if spacings[i] == 'linear':
             continue
         elif spacings[i] == 'log':
             assert (np.all(np.array(domain[i]) > 0))
