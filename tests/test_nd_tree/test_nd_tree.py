@@ -28,7 +28,7 @@ def test_2d_interpolation(dataset_2d_log):
     WHEN: Create an emulator from data
     THEN: Correctly sorts and interpolates data
     """
-    EPS = 10**-13
+    EPS = 10**-14
     N = 200
     data, domain, spacing = dataset_2d_log
     error_threshold = 0
@@ -45,11 +45,10 @@ def test_2d_interpolation(dataset_2d_log):
     error = abs(f_true - f_interp)
     # resize and plot
     plt.imshow(error, origin='lower')
+    plt.title("Should not see any grid structure")
     plt.colorbar()
     plt.show()
-    plt.imshow(f_true, origin='lower')
-    plt.colorbar()
-    plt.show()
+
     # check if error is low
     assert np.all(error <= EPS)
 
@@ -91,7 +90,7 @@ def test_1d_interpolation():
     # build tree
     EPS = 10 ** -13
     N = 200
-    error_threshold = 0
+    error_threshold = 1e-2
     max_depth = 5
     model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
     # Create emulator
@@ -109,3 +108,42 @@ def test_1d_interpolation():
     plt.plot(x, y, '.', label='data')
     plt.legend()
     plt.show()
+
+def test_2d_convergence(dataset_2d_non_linear):
+    EPS = 10 ** -4
+    N = 100
+    data, domain, spacing = dataset_2d_non_linear
+    error_threshold = 0
+    model_classes = [{'type': 'nd-linear', 'transforms': [None] * 2}]
+
+    # Compute true values
+    X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.linspace(domain[1][0], domain[1][1], N))
+    input = np.array([X.flatten(), Y.flatten()]).T
+    f_true = np.cos(X)*2 + np.sin(Y)
+
+    # error arrays
+    num_depths = 6
+    l1_error = np.zeros(num_depths)
+    lI_error = np.zeros(num_depths)
+
+    for i in range(0, num_depths):
+        # Create emulator
+        emulator = ND_Tree(data, i+1, domain, spacing, error_threshold, model_classes)
+        # test at different points
+        f_interp = emulator(input).reshape([N, N])
+        # compute error
+        error = abs(f_true - f_interp)
+        l1_error[i] = np.mean(error)
+        lI_error[i] = np.max(error)
+    # resize and plot
+    plt.figure()
+    plt.plot(np.arange(1, num_depths+1), l1_error, label='L1 Norm')
+    plt.plot(np.arange(1, num_depths+1), lI_error, label='LI Norm')
+    plt.title("Should look linear with a negative slope.")
+    plt.xlabel("Depth")
+    plt.ylabel("Error")
+    plt.yscale("log")
+    plt.legend()
+    plt.show()
+    # check if error is low
+    assert np.all(error <= EPS)

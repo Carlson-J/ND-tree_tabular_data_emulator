@@ -38,6 +38,20 @@ def dataset_2d_log():
                'df_x0_x1': np.ones_like(X1)
            }, domain, spacing
 
+@pytest.fixture
+def dataset_2d_non_linear():
+    # Create a 2D grid spaced in linear space
+    domain = [[0, 1], [0, 1]]  # don't change this or it will break tests
+    dims = [2 ** 6 + 1, 2 ** 6 + 1]
+    spacing = ['linear', 'linear']
+    x0 = np.linspace(domain[0][0], domain[0][1], dims[0])
+    x1 = np.linspace(domain[1][0], domain[1][1], dims[1])
+    X0, X1 = np.meshgrid(x0, x1, indexing='ij')
+
+    return {
+               'f': np.cos(X0)*2 + np.sin(X1)
+           }, domain, spacing
+
 
 @pytest.fixture
 def dataset_4d_log():
