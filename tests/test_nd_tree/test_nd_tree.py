@@ -92,7 +92,7 @@ def test_1d_interpolation():
     EPS = 10 ** -13
     N = 200
     error_threshold = 0
-    max_depth = 4
+    max_depth = 5
     model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
     # Create emulator
     emulator = ND_Tree(data, max_depth, domain, spacing, error_threshold, model_classes)
@@ -100,8 +100,12 @@ def test_1d_interpolation():
     x_test = np.linspace(domain[0][0],domain[0][1], N).reshape([N,1])
     f_interp = emulator(x_test)
     f_true = 3*x_test
-    f_true[x_test>1] = np.sin(x_test[x_test>1])
+    f_true[x_test>1] = np.sin(x_test[x_test > 1])
     error = abs(f_true.flatten() - f_interp)
     # Plot errors
-    plt.plot(x_test, error)
+    plt.plot(x_test, error, '--', label='error')
+    plt.plot(x_test, f_true, label='true')
+    plt.plot(x_test, f_interp, '--', label='interp')
+    plt.plot(x, y, '.', label='data')
+    plt.legend()
     plt.show()

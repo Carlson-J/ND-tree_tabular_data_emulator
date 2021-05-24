@@ -387,7 +387,7 @@ class ND_Tree:
         """
         tree_index = self.compute_tree_index(point, dx)
         # find index in encoding array
-        index = np.searchsorted(self.encoding_array, tree_index, side='left')
+        index = np.searchsorted(self.encoding_array, tree_index, side='right')
         model_index = self.index_array[index]
         # Determine which type of model it is by index
         if len(self.offsets) > 1:
@@ -412,7 +412,10 @@ class ND_Tree:
         # compute cartesian coordinate on regular grid of points
         coords_cart = np.zeros(len(self.dims), dtype=int)
         for i in range(len(point_new)):
-            coords_cart[i] = int(np.around((point_new[i] - domain[i][0]) / dx[i]))
+            coords_cart[i] = int(np.floor((point_new[i] - domain[i][0]) / dx[i]))
+            # if the right most point would index into a cell that is not their move it back a cell.
+            if coords_cart[i] == 2**self.achieved_depth:
+                coords_cart[i] -= 1
         # convert to tree index
         index = 0
         for i in range(self.achieved_depth):
