@@ -108,7 +108,7 @@ def compute_ranges(domain, spacing, dims):
     return ranges
 
 
-def create_children_nodes(node, spacing):
+def create_children_nodes(node, spacing, global_domain, global_dims):
     """
     Add D more children nodes to the current node, where D is the number of dims
     :param node: {
@@ -121,9 +121,13 @@ def create_children_nodes(node, spacing):
             'error'
         }
     :param spacing: (list) The spacing, either 'linear' or 'log', of each dimension, e.g., ['linear', 'linear', 'log']
+    :param global_domain: (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
+            dimension of the global domain
+    :param global_dims: (array) Number of entries in each dimension
     :return: None
     """
     num_dims = len(node['domain'])
+    assert (len(global_domain) == num_dims)
     assert node['children'] is None
     # do any needed transforms
     domain = transform_domain(node['domain'], spacing, reverse=False)
@@ -146,8 +150,6 @@ def create_children_nodes(node, spacing):
         domain_new[:, 0] = c1_new
         domain_new[:, 1] = c2_new
 
-        # compute dims of old domain
-        dims = get_dims(node['mask'])
         # compute new id
         id_new = list(node['id'].copy())
         id_new.append(i)
@@ -158,7 +160,7 @@ def create_children_nodes(node, spacing):
             'children': None,
             'id': id_new,
             'model': None,
-            'mask': create_mask(domain_new, node['domain'], dims, spacing),
+            'mask': create_mask(domain_new, global_domain, global_dims, spacing),
             'error': None
         })
 
@@ -246,7 +248,7 @@ class ND_Tree:
         # check error and depth
         if error >= self.error_threshold and self.max_depth > len(node['id']):
             # create children nodes
-            create_children_nodes(node, self.spacing)
+            create_children_nodes(node, self.spacing, self.domain, self.dims)
             if len(node['children'][0]['id']) > self.achieved_depth:
                 self.achieved_depth = len(node['children'][0]['id'])
             # refine children nodes
@@ -359,12 +361,13 @@ class ND_Tree:
         :param inputs: (2d array) each row is a different point
         :return: (array) the function value at each point.
         """
+        inputs = np.atleast_2d(inputs)
         assert(inputs.shape[1] == len(self.dims))
         # precompute some things
         domain = transform_domain(self.domain, self.spacing)
         dx = np.zeros([len(self.dims)])
         for i in range(len(self.dims)):
-            dx[i] = (domain[i][1] - domain[i][0]) / len(self.dims)**self.achieved_depth
+            dx[i] = (domain[i][1] - domain[i][0]) / 2**(self.achieved_depth*len(self.dims))
         sol = np.zeros([inputs.shape[0]])
         for i, point in enumerate(inputs):
             # find out which model

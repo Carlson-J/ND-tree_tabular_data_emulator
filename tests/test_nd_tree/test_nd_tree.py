@@ -22,67 +22,6 @@ def test_init(dataset_2d):
         assert False, f'initializing ND_Tree raised an exception: {err}'
 
 
-def test_create_children_nodes(default_root_node_2d):
-    """
-    GIVEN: a node
-    WHEN: split nodes
-    THEN: node has correct number of children and parameters
-    """
-    EPS = 10**-15
-    node = default_root_node_2d
-    num_dims = len(node['mask'])
-    spacing = ['linear', 'linear']
-
-    # create new children nodes
-    create_children_nodes(node, spacing)
-
-    # check to make sure everything is correct
-    assert len(node['children']) == 2**num_dims
-    for i in range(num_dims):
-        node2 = node['children'][i]
-        assert list(node['id']) + [i] == node2['id']
-        assert node2['children'] is None
-        assert node2['model'] is None
-        assert node2['error'] is None
-        assert node2['children'] is None
-        assert node2['mask'] is not None
-    # check new domains
-    assert np.all(abs(node['children'][0]['domain'] - np.array([[0, 0.5], [0, 0.5]])) <= EPS)
-    assert np.all(abs(node['children'][1]['domain'] - np.array([[0.5, 1], [0, 0.5]])) <= EPS)
-    assert np.all(abs(node['children'][2]['domain'] - np.array([[0, 0.5], [0.5, 1]])) <= EPS)
-    assert np.all(abs(node['children'][3]['domain'] - np.array([[0.5, 1], [0.5, 1]])) <= EPS)
-
-
-def test_create_children_nodes_transforms(default_root_node_2d_log):
-    """
-    GIVEN: a node
-    WHEN: split nodes
-    THEN: node has correct number of children and parameters
-    """
-    EPS = 10**-15
-    node, spacing = default_root_node_2d_log
-    num_dims = len(node['mask'])
-
-    # create new children nodes
-    create_children_nodes(node, spacing)
-
-    # check to make sure everything is correct
-    assert len(node['children']) == 2**num_dims
-    for i in range(num_dims):
-        node2 = node['children'][i]
-        assert list(node['id']) + [i] == node2['id']
-        assert node2['children'] is None
-        assert node2['model'] is None
-        assert node2['error'] is None
-        assert node2['children'] is None
-        assert node2['mask'] is not None
-    # check new domains
-    assert np.all(abs(node['children'][0]['domain'] - np.array([[0, 0.5], [1, 10**0.5]])) <= EPS)
-    assert np.all(abs(node['children'][1]['domain'] - np.array([[0.5, 1], [1, 10**0.5]])) <= EPS)
-    assert np.all(abs(node['children'][2]['domain'] - np.array([[0, 0.5], [10**0.5, 10]])) <= EPS)
-    assert np.all(abs(node['children'][3]['domain'] - np.array([[0.5, 1], [10**0.5, 10]])) <= EPS)
-
-
 def test_2d_interpolation(dataset_2d_log):
     """
     GIVEN: 2d function evaluations and a domain.
@@ -133,10 +72,36 @@ def test_saving_nd_tree(dataset_4d_log):
     output_true = emulator(inputs)
     # save it
     emulator.save(SAVE_LOCATION)
-    # load emulator
-    emulator = load_emulator(SAVE_LOCATION)
-    # see if the results are the same
-    output_trial = emulator(inputs)
-    assert np.all(abs(output_trial - output_true) <= EPS)
 
 
+def test_1d_interpolation():
+    """
+    GIVEN: 1d domain and function values
+    WHEN: build tree
+    THEN: refines correctly
+    """
+    # create function and domain
+    domain = [[0,2]]
+    x = np.linspace(domain[0][0],domain[0][1],2**5 + 1)
+    y = 3*x
+    y[x>1] = np.sin(x[x>1])
+    data = {'f': y}
+    spacing = ['linear']
+
+    # build tree
+    EPS = 10 ** -13
+    N = 200
+    error_threshold = 0
+    max_depth = 4
+    model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
+    # Create emulator
+    emulator = ND_Tree(data, max_depth, domain, spacing, error_threshold, model_classes)
+    # Compute new values over domain
+    x_test = np.linspace(domain[0][0],domain[0][1], N).reshape([N,1])
+    f_interp = emulator(x_test)
+    f_true = 3*x_test
+    f_true[x_test>1] = np.sin(x_test[x_test>1])
+    error = abs(f_true.flatten() - f_interp)
+    # Plot errors
+    plt.plot(x_test, error)
+    plt.show()
