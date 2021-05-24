@@ -256,6 +256,7 @@ class ND_Tree:
                 self.refine_region(node['children'][i])
         else:
             node['model'] = fit
+            node['error'] = error
         return
 
     def compute_error(self, true, interp):
@@ -367,7 +368,7 @@ class ND_Tree:
         domain = transform_domain(self.domain, self.spacing)
         dx = np.zeros([len(self.dims)])
         for i in range(len(self.dims)):
-            dx[i] = (domain[i][1] - domain[i][0]) / 2**(self.achieved_depth*len(self.dims))
+            dx[i] = (domain[i][1] - domain[i][0]) / 2**self.achieved_depth
         sol = np.zeros([inputs.shape[0]])
         for i, point in enumerate(inputs):
             # find out which model
