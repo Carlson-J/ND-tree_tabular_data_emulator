@@ -1,4 +1,4 @@
-from nd_emulator.nd_tree import ND_Tree, create_children_nodes, load_emulator
+from nd_emulator import build_emulator, load_emulator
 import pytest
 import numpy as np
 import matplotlib.pyplot as plt
@@ -17,9 +17,9 @@ def test_init(dataset_2d):
     error_threshold = 0.1
     data, domain, spacing = dataset_2d
     try:
-        ND_Tree(data, max_depth, domain, spacing, error_threshold, model_classes)
+        build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     except Exception as err:
-        assert False, f'initializing ND_Tree raised an exception: {err}'
+        assert False, f'initializing build_emulator raised an exception: {err}'
 
 
 def test_2d_interpolation(dataset_2d_log):
@@ -35,7 +35,7 @@ def test_2d_interpolation(dataset_2d_log):
     max_depth = 2
     model_classes = [{'type': 'nd-linear', 'transforms': [None]*2}]
     # Create emulator
-    emulator = ND_Tree(data, max_depth, domain, spacing, error_threshold, model_classes)
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     # Compute new values over domain
     X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.logspace(np.log10(domain[1][0])
                                                                                  , np.log10(domain[1][1]), N))
@@ -66,7 +66,7 @@ def test_saving_nd_tree(dataset_4d_log):
     max_depth = 2
     model_classes = [{'type': 'nd-linear', 'transforms': ['linear']*4}]
     # Create emulator
-    emulator = ND_Tree(data, max_depth, domain, spacing, error_threshold, model_classes)
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     inputs = np.random.uniform(0.1, 0.5, size=[100, len(spacing)])
     output_true = emulator(inputs)
     # save it
@@ -94,7 +94,7 @@ def test_1d_interpolation():
     max_depth = 5
     model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
     # Create emulator
-    emulator = ND_Tree(data, max_depth, domain, spacing, error_threshold, model_classes)
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     # Compute new values over domain
     x_test = np.linspace(domain[0][0],domain[0][1], N).reshape([N,1])
     f_interp = emulator(x_test)
@@ -129,7 +129,7 @@ def test_2d_convergence(dataset_2d_non_linear):
 
     for i in range(0, num_depths):
         # Create emulator
-        emulator = ND_Tree(data, i+1, domain, spacing, error_threshold, model_classes)
+        emulator = build_emulator(data, i+1, domain, spacing, error_threshold, model_classes)
         # test at different points
         f_interp = emulator(input).reshape([N, N])
         # compute error
@@ -174,7 +174,7 @@ def test_4d_convergence(dataset_4d_log_non_linear):
 
     for i in range(0, num_depths):
         # Create emulator
-        emulator = ND_Tree(data, i + 1, domain, spacing, error_threshold, model_classes)
+        emulator = build_emulator(data, i + 1, domain, spacing, error_threshold, model_classes)
         # test at different points
         f_interp = emulator(inputs).flatten()
         # compute error
@@ -207,7 +207,7 @@ def test_4d_convergence(dataset_4d_log_non_linear):
 #     max_depth = 2
 #     model_classes = [{'type': 'nd-linear', 'transforms': [None, 'log']}]
 #     # Create emulator
-#     emulator = ND_Tree(data, max_depth, domain, spacing, error_threshold, model_classes)
+#     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
 #     # Compute new values over domain
 #     X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.logspace(np.log10(domain[1][0])
 #                                                                                , np.log10(domain[1][1]), N))

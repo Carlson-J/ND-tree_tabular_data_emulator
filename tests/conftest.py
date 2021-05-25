@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from nd_emulator.mask import create_mask
+from nd_emulator import create_mask
 
 
 @pytest.fixture

@@ -1,6 +1,19 @@
 import numpy as np
 
 
+def get_mask_dims(mask):
+    """
+    Compute the dims of a given mask
+    :param mask:
+    :return: dims
+    """
+    num_dims = len(mask)
+    dims = np.zeros([num_dims], dtype=int)
+    for j in range(num_dims):
+        dims[j] = mask[j].stop - mask[j].start
+    return dims
+
+
 def create_mask(sub_domain, domain, dims, spacings, domain_rounding_type=None):
     """
             A mask for nd data. It is assumed that the data is evenly spaced after the transform has been done.

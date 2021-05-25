@@ -1,5 +1,5 @@
 import numpy as np
-from nd_emulator.nd_tree import compute_ranges, transform_domain
+from nd_emulator.domain_functions import compute_ranges, transform_domain
 
 
 def test_compute_ranges():
