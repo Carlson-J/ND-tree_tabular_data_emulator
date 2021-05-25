@@ -1,7 +1,8 @@
 import numpy as np
 from .model_classes import fit_nd_linear_model, nd_linear_model
 from .mask import create_mask, get_mask_dims
-from .domain_functions import transform_domain
+from .domain_functions import transform_domain, compute_ranges
+from .parameter_struct import Parameters
 
 
 class DTree:
@@ -21,22 +22,23 @@ class DTree:
         :return:
         """
         # constants needed for saving and loading things
-        self.TRANSFORMS = ['linear', 'log']
         self.params = tree_params
         self.data = data
+        self.domain_spacings = compute_ranges(self.params.domain, self.params.spacing, self.params.dims)
+        self.achieved_depth = 0
 
         # create the root node
-        self.tree = {
-            'domain': self.params['domain'],
+        self.root = {
+            'domain': self.params.domain,
             'children': None,
             'id': [],
             'model': None,
-            'mask': create_mask(self.params['domain'], self.params['domain'], self.params['dims'], self.params['spacing']),
+            'mask': create_mask(self.params.domain, self.params.domain, self.params.dims, self.params.spacing),
             'error': None
         }
 
         # build tree
-        self.refine_region(self.tree)
+        self.refine_region(self.root)
 
     def refine_region(self, node):
 
@@ -44,13 +46,13 @@ class DTree:
         fit, error = self.fit_region(node)
 
         # check error and depth
-        if error >= self.params['error_threshold'] and self.params['max_depth'] > len(node['id']):
+        if error >= self.params.error_threshold and self.params.max_depth > len(node['id']):
             # create children nodes
             self.create_children_nodes(node)
-            if len(node['children'][0]['id']) > self.params['achieved_depth']:
-                self.params['achieved_depth'] = len(node['children'][0]['id'])
+            if len(node['children'][0]['id']) > self.achieved_depth:
+                self.achieved_depth = len(node['children'][0]['id'])
             # refine children nodes
-            for i in range(2**len(self.params['dims'])):
+            for i in range(2 ** len(self.params.dims)):
                 self.refine_region(node['children'][i])
         else:
             node['model'] = fit
@@ -74,7 +76,7 @@ class DTree:
         num_dims = len(node['domain'])
         assert node['children'] is None
         # do any needed transforms
-        domain = transform_domain(node['domain'], self.params['spacing'], reverse=False)
+        domain = transform_domain(node['domain'], self.params.spacing, reverse=False)
 
         # unpack corner and half the cell edge values
         c1 = np.array(domain)[:, 0]
@@ -98,13 +100,13 @@ class DTree:
             id_new = list(node['id'].copy())
             id_new.append(i)
             # reverse transformation
-            domain_new = transform_domain(domain_new, self.params['spacing'], reverse=True)
+            domain_new = transform_domain(domain_new, self.params.spacing, reverse=True)
             node['children'].append({
                 'domain': domain_new,
                 'children': None,
                 'id': id_new,
                 'model': None,
-                'mask': create_mask(domain_new, self.params['domain'], self.params['dims'], self.params['spacing']),
+                'mask': create_mask(domain_new, self.params.domain, self.params.dims, self.params.spacing),
                 'error': None
             })
 
@@ -116,25 +118,25 @@ class DTree:
         """
         current_error = np.infty
         best_fit = None
-        assert (len(self.params['model_classes']) > 0)
+        assert (len(self.params.model_classes) > 0)
         # create test set
         dims = get_mask_dims(node['mask'])
-        random_indices = np.random.choice(np.prod(dims, dtype=int), min([np.prod(dims), self.params['max_test_points']]))
+        random_indices = np.random.choice(np.prod(dims, dtype=int), min([np.prod(dims), self.params.max_test_points]))
         test_indices = np.indices(dims).reshape([len(dims), np.prod(dims, dtype=int)]).T[random_indices]
         test_points = np.zeros([len(random_indices), len(dims)])
         for i in range(len(dims)):
-            test_points[:, i] = self.params['domain_spacings'][i][test_indices[:, i]]
+            test_points[:, i] = self.domain_spacings[i][test_indices[:, i]]
 
         # try each model class to which gives the lowest predicted error
-        for model_class in self.params['model_classes']:
+        for model_class in self.params.model_classes:
             if model_class['type'] == 'nd-linear':
                 # fit model
-                X = np.zeros([2, len(self.params['dims'])])
-                for i in range(len(self.params['dims'])):
-                    X[0, i] = self.params['domain_spacings'][i][node['mask'][i]][0]
-                    X[1, i] = self.params['domain_spacings'][i][node['mask'][i]][-1]
+                X = np.zeros([2, len(self.params.dims)])
+                for i in range(len(self.params.dims)):
+                    X[0, i] = self.domain_spacings[i][node['mask'][i]][0]
+                    X[1, i] = self.domain_spacings[i][node['mask'][i]][-1]
                 weights = fit_nd_linear_model(self.data['f'][node['mask']], X)
-                fit = {'type': model_class, 'weights': weights, 'transforms': [None]*len(self.params['dims'])}
+                fit = {'type': model_class, 'weights': weights, 'transforms': [None] * len(self.params.dims)}
                 # compute error
                 f_interp = nd_linear_model(weights, test_points)
                 f_true = np.array([self.data['f'][tuple(a)] for a in test_indices])
@@ -155,10 +157,10 @@ class DTree:
         :param interp: (nd array)
         :return: (float) error
         """
-        if self.params['relative_error']:
-            return np.max(abs(true-interp)/abs(true))
+        if self.params.relative_error:
+            return np.max(abs(true - interp) / abs(true))
         else:
-            return np.max(abs(true-interp))
+            return np.max(abs(true - interp))
 
     def _get_leaves(self, node, leaf_list):
         """
@@ -179,5 +181,20 @@ class DTree:
         :return: (list) of leaf nodes
         """
         leaves = []
-        self._get_leaves(self.tree, leaves)
+        if self.root['children'] is None:
+            assert self.achieved_depth == 0
+            leaves.append(self.root)
+        else:
+            self._get_leaves(self.root, leaves)
+
         return leaves
+
+    def get_params(self):
+        """
+        return the parameters for the tree. Note that the max depth is changed in this compared to self.params
+        to be the achieved depth.
+        :return: Parameters
+        """
+        return Parameters(self.achieved_depth, self.params.spacing, self.params.dims, self.params.error_threshold,
+                          self.params.model_classes, self.params.max_test_points, self.params.relative_error,
+                          self.params.domain)
