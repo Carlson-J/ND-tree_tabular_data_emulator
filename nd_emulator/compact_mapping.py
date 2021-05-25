@@ -185,7 +185,7 @@ def convert_tree(tree):
     model_arrays = [[]] * len(tree.params.model_classes)
 
     for leaf in leaves:
-        model_arrays[params.model_classes.index(leaf['model']['type'])].append(leaf['model']['weights'])
+        model_arrays[list(params.model_classes).index(leaf['model']['type'])].append(leaf['model']['weights'])
 
     # create encoding array
     encoding_array = np.zeros([len(leaves)], dtype=int)
@@ -197,7 +197,7 @@ def convert_tree(tree):
         encoding_array[i] = compute_encoding_index(leaves[i], params)
         # compute index-array index
         # # determine model type index
-        type_index = params.model_classes.index(leaves[i]['model']['type'])
+        type_index = list(params.model_classes).index(leaves[i]['model']['type'])
         index_array[i] = counters[type_index] + offsets[type_index]
         counters[type_index] += 1
 
