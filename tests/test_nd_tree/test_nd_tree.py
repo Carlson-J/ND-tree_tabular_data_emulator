@@ -109,6 +109,7 @@ def test_1d_interpolation():
     plt.legend()
     plt.show()
 
+
 def test_2d_convergence(dataset_2d_non_linear):
     EPS = 10 ** -4
     N = 100
@@ -147,3 +148,78 @@ def test_2d_convergence(dataset_2d_non_linear):
     plt.show()
     # check if error is low
     assert np.all(error <= EPS)
+
+
+def test_4d_convergence(dataset_4d_log_non_linear):
+    """
+    Given: 4d data set
+    WHEN: Different max depths are given
+    THEN: The error converges to 0
+    """
+    EPS = 10**-1
+    data, domain, spacing = dataset_4d_log_non_linear
+    # create test data
+    low = np.array(domain)[:, 0]
+    high = np.array(domain)[:, 1]
+    N = 100
+    inputs = np.random.uniform(low, high, size=[N, 4])
+    f_true = (inputs[:, 0]**2 * inputs[:, 1] * inputs[:, 2] * inputs[:, 3] + 1).flatten()
+    error_threshold = 0
+    model_classes = [{'type': 'nd-linear', 'transforms': [None] * 4}]
+
+    # error arrays
+    num_depths = 2
+    l1_error = np.zeros(num_depths)
+    lI_error = np.zeros(num_depths)
+
+    for i in range(0, num_depths):
+        # Create emulator
+        emulator = ND_Tree(data, i + 1, domain, spacing, error_threshold, model_classes)
+        # test at different points
+        f_interp = emulator(inputs).flatten()
+        # compute error
+        error = abs(f_true - f_interp)/abs(f_true)
+        l1_error[i] = np.mean(error)
+        lI_error[i] = np.max(error)
+
+    plt.figure()
+    plt.plot(np.arange(1, num_depths+1), l1_error, label='L1 Norm')
+    plt.plot(np.arange(1, num_depths+1), lI_error, label='LI Norm')
+    plt.title("Should look linear with a negative slope.")
+    plt.xlabel("Depth")
+    plt.ylabel("Error")
+    plt.yscale("log")
+    plt.legend()
+    plt.show()
+    # check if error is low
+    assert np.all(l1_error[-1] <= EPS)
+
+# def test_2d_log_transforms(dataset_2d_log_non_linear):
+#     """
+#     GIVEN: 2d function evaluations and a domain.
+#     WHEN: Create an emulator from data with log transforms
+#     THEN: Correctly sorts and interpolates data
+#     """
+#     EPS = 10 ** -14
+#     N = 200
+#     data, domain, spacing = dataset_2d_log_non_linear
+#     error_threshold = 0
+#     max_depth = 2
+#     model_classes = [{'type': 'nd-linear', 'transforms': [None, 'log']}]
+#     # Create emulator
+#     emulator = ND_Tree(data, max_depth, domain, spacing, error_threshold, model_classes)
+#     # Compute new values over domain
+#     X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.logspace(np.log10(domain[1][0])
+#                                                                                , np.log10(domain[1][1]), N))
+#     input = np.array([X.flatten(), Y.flatten()]).T
+#     f_interp = emulator(input).reshape([N, N])
+#     f_true = X * Y
+#     error = abs(f_true - f_interp)
+#     # resize and plot
+#     plt.imshow(error, origin='lower')
+#     plt.title("Should not see any grid structure")
+#     plt.colorbar()
+#     plt.show()
+#
+#     # check if error is low
+#     assert np.all(error <= EPS)

@@ -398,7 +398,6 @@ class ND_Tree:
         model_weights = self.model_arrays[model_list_index][model_index - self.offsets[model_list_index]]
         return model_weights, model_list_index
 
-
     def compute_tree_index(self, point, dx):
         """
         Compute the tree index-space index for a given point.
