@@ -12,7 +12,7 @@ public:
     Emulator(std::string filename){
 
     }
-
+    double i =1;
 private:
     int num_dim;
     int num_model_classes;
