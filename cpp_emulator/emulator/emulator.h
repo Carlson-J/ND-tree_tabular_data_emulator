@@ -5,14 +5,14 @@
 #ifndef CPP_EMULATOR_EMULATOR_H
 #define CPP_EMULATOR_EMULATOR_H
 #include "string"
+#include "H5Cpp.h"
 
 template <class encoding_int, class indexing_int>
 class Emulator {
 public:
     Emulator(std::string filename){
-
+        std::cout << "Made new object!";
     }
-    double i =1;
 private:
     int num_dim;
     int num_model_classes;

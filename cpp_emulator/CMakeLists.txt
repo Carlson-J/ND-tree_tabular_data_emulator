@@ -3,7 +3,10 @@ project(cpp_emulator)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_subdirectory(GoogleTests)
+add_subdirectory(HighFive)
 
-add_executable(cpp_emulator emulator/main.cpp emulator/emulator.h GoogleTests)
+add_executable(cpp_emulator main.cpp)
+add_compile_options(-DHIGHFIVE_USE_BOOST=ON)
+target_link_libraries(cpp_emulator HighFive)
 
+add_subdirectory(Tests)
