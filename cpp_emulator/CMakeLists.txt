@@ -4,6 +4,7 @@ project(cpp_emulator)
 set(CMAKE_CXX_STANDARD 17)
 
 add_subdirectory(HighFive)
+include_directories(emulator)
 
 add_executable(cpp_emulator main.cpp)
 add_compile_options(-DHIGHFIVE_USE_BOOST=ON)

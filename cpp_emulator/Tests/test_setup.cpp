@@ -6,7 +6,7 @@
 #include "catch.h"
 #include "H5Cpp.h"
 #include <highfive/H5File.hpp>
-
+#include "emulator.h"
 
 unsigned int Factorial( unsigned int number ) {
     return number <= 1 ? number : Factorial(number-1)*number;
@@ -41,4 +41,9 @@ TEST_CASE("Test hdf5 read and write", "[HDF5]"){
     // Test if it is the same
     REQUIRE(data == result);
     REQUIRE_FALSE(data2 == result);
+}
+
+TEST_CASE("Load Emulator"){
+    // load the emulator
+    Emulator<int, int> emulator("../../Tests/saved_emulator.hdf5");
 }
