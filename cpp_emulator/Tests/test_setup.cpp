@@ -47,3 +47,21 @@ TEST_CASE("Load Emulator"){
     // load the emulator
     Emulator<int, int> emulator("../../Tests/saved_emulator.hdf5");
 }
+
+TEST_CASE("Interpolation return size and type", "[Interp1]"){
+    // Load the emulator
+    Emulator<int, int> emulator("../../Tests/saved_emulator.hdf5");
+    // create 4d data for interpolation
+    const size_t num_points = 3;
+    const size_t num_dim = 4;
+    double x0[num_points] = {1.0, 2.0, 4.0};
+    double x1[num_points] = {10.0, 20.0, 40.0};
+    double x2[num_points] = {-1.0, -2.0, -4.0};
+    double x3[num_points] = {-10.0, -20.0, -40.0};
+    // Create array of pointers to point to each array
+    double* points[num_dim] = {x0, x1, x2, x3};
+    // Create array for solution
+    double sol[num_points] = {0};
+    // do interpolation on 4d data
+    emulator.interpolate(points, num_points, sol);
+}
