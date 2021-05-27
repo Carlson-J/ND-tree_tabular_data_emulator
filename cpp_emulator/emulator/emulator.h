@@ -8,6 +8,7 @@
 #include <highfive/H5File.hpp>
 #include "string"
 #include "H5Cpp.h"
+#include "constants.h"
 
 template <class encoding_int, class indexing_int>
 class Emulator {

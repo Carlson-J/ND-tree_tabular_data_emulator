@@ -1,0 +1,12 @@
+//
+// Created by jared on 5/27/2021.
+//
+
+#ifndef CPP_EMULATOR_CONSTANTS_H
+#define CPP_EMULATOR_CONSTANTS_H
+
+#define SPACING_LINEAR 0
+#define SPACING_LOG 1
+#define MODEL_CLASS_TYPE_ND_LINEAR 0
+
+#endif //CPP_EMULATOR_CONSTANTS_H

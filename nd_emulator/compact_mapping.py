@@ -19,6 +19,10 @@ def save_compact_mapping(compact_mapping, filename):
     encoding_compressed = np.ndarray.astype(compact_mapping.encoding_array, dtype=encode_dtype)
     index_compressed = np.ndarray.astype(compact_mapping.index_array, dtype=value_dtype)
 
+    # mapping from strings to ints for saving in hdf5 file
+    spacing_types = ['linear', 'log']
+    model_class_types = ['nd-linear']
+
     # Save arrays as hdf5 files
     with h5py.File(filename, 'w') as file:
         # Save models
@@ -40,14 +44,12 @@ def save_compact_mapping(compact_mapping, filename):
         mapping_group.create_dataset("indexing", data=index_compressed, dtype=value_dtype)
         mapping_group.create_dataset("offsets", data=compact_mapping.offsets)
 
-
-
         # save parameters
         file.attrs['max_depth'] = compact_mapping.params.max_depth
-        file.attrs['spacing'] = [s.encode("ascii") for s in compact_mapping.params.spacing]
+        file.attrs['spacing'] = [spacing_types.index(s) for s in compact_mapping.params.spacing]
         file.attrs['dims'] = compact_mapping.params.dims
         file.attrs['error_threshold'] = compact_mapping.params.error_threshold
-        file.attrs['model_classes'] = [s['type'].encode("ascii") for s in compact_mapping.params.model_classes]
+        file.attrs['model_classes'] = [model_class_types.index(s['type']) for s in compact_mapping.params.model_classes]
         file.attrs['max_test_points'] = compact_mapping.params.max_test_points
         file.attrs['relative_error'] = compact_mapping.params.relative_error
         file.attrs['domain'] = compact_mapping.params.domain
