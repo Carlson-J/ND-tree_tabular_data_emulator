@@ -70,6 +70,25 @@ def dataset_2d_log_non_linear():
 
 
 @pytest.fixture
+def dataset_4d():
+    domain = [[0, 1], [0, 2], [0, 3], [0, 4]]
+    dims = [2 ** 3 + 1, 2 ** 4 + 1, 2 ** 4 + 1, 2 ** 4 + 1]
+    spacing = ['linear', 'linear', 'linear', 'linear']
+    X = []
+    for i in range(len(dims)):
+        X.append(np.linspace(domain[i][0], domain[i][1], dims[i]))
+    F = np.zeros(dims)
+    for i in range(dims[0]):
+        for j in range(dims[1]):
+            for k in range(dims[2]):
+                for z in range(dims[3]):
+                    F[i, j, k, z] = X[0][i] + X[1][j] + X[2][k] + X[3][z] + 1.
+    return {
+               'f': F,
+           }, domain, spacing
+
+
+@pytest.fixture
 def dataset_4d_log():
     # Create a 2D grid spaced in linear space
     domain = [[0, 1], [1e-0, 1e1], [0, 1], [1, 2]]  # don't change this or it will break tests
