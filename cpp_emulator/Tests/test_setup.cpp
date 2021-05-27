@@ -45,23 +45,29 @@ TEST_CASE("Test hdf5 read and write", "[HDF5]"){
 
 TEST_CASE("Load Emulator"){
     // load the emulator
-    Emulator<int, int> emulator("../../Tests/saved_emulator.hdf5");
+    Emulator<int, int> emulator("../../Tests/saved_emulator_4d.hdf5");
 }
 
-TEST_CASE("Interpolation return size and type", "[Interp1]"){
+TEST_CASE("Interpolation on linear function", "[Interp_4d_linear]"){
     // Load the emulator
-    Emulator<int, int> emulator("../../Tests/saved_emulator.hdf5");
+    const double EPS = 1e-12;
+    Emulator<int, int> emulator("../../Tests/saved_emulator_4d.hdf5");
     // create 4d data for interpolation
-    const size_t num_points = 3;
+    const size_t num_points = 4;
     const size_t num_dim = 4;
-    double x0[num_points] = {1.0, 2.0, 4.0};
-    double x1[num_points] = {10.0, 20.0, 40.0};
-    double x2[num_points] = {-1.0, -2.0, -4.0};
-    double x3[num_points] = {-10.0, -20.0, -40.0};
+    double x0[num_points] = {0.0, 0.3, 0.6, 0.4};
+    double x1[num_points] = {0.0, 1.3, 0.1, 2.0};
+    double x2[num_points] = {0.0, 3.0, 2.8, 0.1};
+    double x3[num_points] = {0.0, 0.0, 4.0, 5.1};
     // Create array of pointers to point to each array
     double* points[num_dim] = {x0, x1, x2, x3};
     // Create array for solution
     double sol[num_points] = {0};
     // do interpolation on 4d data
     emulator.interpolate(points, num_points, sol);
+    // check if results are correct
+    for (size_t i = 0; i < num_points; i++){
+        double sol_true = x0[i] + x1[i] + x2[i] + x3[i] + 1.0;
+        REQUIRE(std::fabs(sol[i] - sol_true) < EPS);
+    }
 }

@@ -49,7 +49,7 @@ public:
          * input space to each cell is included in the offline emulator.
          */
         // Determine which model (i.e. interpolator) each point will use.
-        std::unique_ptr<size_t[]> mapping_array = std::make_unique<size_t[]>(num_points);
+        size_t mapping_array[num_points];
         for (size_t i = 0; i < num_points; i++){
             double point[num_dim];
             for (size_t j = 0; j < num_dim; j++){
@@ -169,7 +169,7 @@ private:
             cartesian_index[i] = size_t((point[i] - domain[i][0])/dx[i]);
             // If the index is outside the domain of the emulator round to the nearest cell.
             cartesian_index[i] = std::max(size_t(0), cartesian_index[i]);
-            cartesian_index[i] = std::min(size_t(dims[i] - 1), cartesian_index[i]);
+            cartesian_index[i] = std::min(size_t(dims[i] - 2), cartesian_index[i]);
         }
         // convert to tree index space
         size_t index = 0;
@@ -183,7 +183,7 @@ private:
 
     double interp_point(const double* point, const size_t index){
         // Determine which model array to use
-        size_t model_type_index = std::lower_bound(offsets.begin(), offsets.end(), index) - offsets.begin();
+        size_t model_type_index = std::upper_bound(offsets.begin(), offsets.end(), index) - offsets.begin() - 1;
         // get model weights
         std::vector<double>& weights = model_arrays[model_type_index][index - offsets[model_type_index]];
         // Choose which interpolation scheme to use
@@ -195,7 +195,7 @@ private:
     }
 
     // ------ Model Classes ------ //
-    double nd_linear_interp(const double* point, const std::vector<double> weight){
+    double nd_linear_interp(const double* point, const std::vector<double>& weight){
         /*
          * do an ND-linear interpolation at the points in X given model weight values.
          * https://math.stackexchange.com/a/1342377
