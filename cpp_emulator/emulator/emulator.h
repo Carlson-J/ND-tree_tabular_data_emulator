@@ -9,6 +9,7 @@
 #include "string"
 #include "H5Cpp.h"
 #include "constants.h"
+#include <memory>
 
 template <class encoding_int, class indexing_int>
 class Emulator {
@@ -18,15 +19,15 @@ public:
         load_emulator(filename);
     }
 private:
-    int num_dim;
-    int num_model_classes;
-    int num_models;
-    int * offsets;
-    encoding_int * encoding_array;
-    indexing_int * indexing_array;
-    double ** mapping_arrays;
+    size_t num_dim;
+    size_t num_model_classes;
+    size_t num_models;
+    std::vector<encoding_int> offsets;
+    std::vector<encoding_int> encoding_array;
+    std::vector<encoding_int> indexing_array;
+    std::vector<std::vector<std::vector<double>>> model_arrays;
 
-    void load_emulator(const std::string& file_location){
+    void load_emulator(const std::string& file_location) {
         // Load hdf5 file
         HighFive::File file(file_location, HighFive::File::ReadOnly);
 
@@ -35,6 +36,7 @@ private:
         // -- dims
         std::vector<int> dims;
         attribute.template read(dims);
+        this->num_dim = dims.size();
         // -- domain
         attribute = file.getAttribute("domain");
         std::vector<std::vector<double>> domain;
@@ -55,36 +57,39 @@ private:
         double relative_error;
         attribute = file.getAttribute("relative_error");
         attribute.template read(relative_error);
-        // -- model clases
+        // -- model classes
+        std::vector<int> model_classes;
         attribute = file.getAttribute("model_classes");
-        num_model_classes = attribute.getSpace().getDimensions()[0];
-        HighFive::FixedLenStringArray<100> model_classes;
-        if (num_model_classes == 1){
-            attribute.template read(model_classes[0]);
-        } else{
-            attribute.template read(model_classes);
+        attribute.template read(model_classes);
+        // -- spacings
+        std::vector<int> spacings;
+        attribute = file.getAttribute("spacing");
+        attribute.template read(spacings);
+
+        // Load mapping arrays
+        HighFive::Group mapping_group = file.getGroup("mapping");
+        // -- encoding array
+        HighFive::DataSet dataset = mapping_group.getDataSet("encoding");
+        dataset.template read(encoding_array);
+        // -- indexing array
+        dataset = mapping_group.getDataSet("indexing");
+        dataset.template read(indexing_array);
+        // -- offsets array
+        dataset = mapping_group.getDataSet("offsets");
+        dataset.template read(offsets);
+        this->num_models = encoding_array.size();
+
+        // Load model arrays
+        HighFive::Group model_group = file.getGroup("models");
+        // -- Create temp array to store it in
+        auto model_types = model_group.listObjectNames();
+        this->num_model_classes = model_types.size();
+        for (const auto &model_name : model_types) {
+            dataset = model_group.getDataSet(model_name);
+            std::vector<std::vector<double>> model_data;
+            dataset.template read(model_data);
+            model_arrays.push_back(model_data);
         }
-
-//        // -- model clases
-//        std::vector<std::string> model_classes;
-//        attribute = file.getAttribute("model_classes");
-//        attribute.template read(model_classes);
-
-        for(auto s : model_classes)
-            std::cout << "model classes : " << s << std::endl;
-
-        std::cout << "error_threshold " << error_threshold << std::endl;
-        std::cout << "max_depth " << max_depth << std::endl;
-        std::cout << "max_test_points " << max_test_points << std::endl;
-        std::cout << "relative_error " << relative_error << std::endl;
-
-        // print attribute
-        for (const auto v : domain) {
-            for (const auto a : v) {
-                std::cout << "domain: " << a << std::endl;
-            }
-        }
-        std::cout << error_threshold << std::endl;
     }
 };
 
