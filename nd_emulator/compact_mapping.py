@@ -9,6 +9,46 @@ SPACING_TYPES = ['linear', 'log']
 MODEL_CLASS_TYPES = ['nd-linear']
 TRANSFORMS = ['linear', 'log']
 
+
+def type_header_conversion(type):
+    """
+    Convert the numpy type to a string type that will be used in the C++ emulator
+    :param type: np unsigned int type
+    :return:
+    """
+    if type is np.uint8:
+        return "unsigned char"
+    elif type is np.uint16:
+        return "unsigned short"
+    elif type is np.uint32:
+        return "unsigned long"
+    elif type is np.uint64:
+        return "unsigned long long"
+    else:
+        raise ValueError("Unknown type")
+
+
+def save_header_file(filename, encoding_type, indexing_type, encoding_size,
+                     num_dims, num_model_classes, model_sizes):
+
+    # create file to hold define constants
+    if filename[-3:] == '.h5':
+        save_name = filename[:-3] + "_constants.h"
+    elif filename[-5:] == '.hdf5':
+        save_name = filename[:-5] + "_constants.h"
+    else:
+        save_name = filename + "_constants.h"
+
+    identifier = "#define ND_TREE_EMULATOR_"
+    with open(save_name, 'w') as file:
+        file.write(identifier + f"ENCODING_SIZE {encoding_size} \n")
+        file.write(identifier + f"ENCODING_TYPE {type_header_conversion(encoding_type)} \n")
+        file.write(identifier + f"INDEXING_TYPE {type_header_conversion(indexing_type)} \n")
+        file.write(identifier + f"NUM_DIM {num_dims} \n")
+        file.write(identifier + f"NUM_MODEL_CLASSES {num_model_classes} \n")
+        for i in range(num_model_classes):
+            file.write(identifier + f"MODEL_SIZE_{i} {model_sizes[i]} \n")
+
 def save_compact_mapping(compact_mapping, filename):
     """
     Save the compact mapping array in an hdf5 file.
@@ -18,11 +58,14 @@ def save_compact_mapping(compact_mapping, filename):
     """
     # Save the mapping using the smallest int size needed.
     encode_dtype = find_int_type(np.max(compact_mapping.encoding_array))
-    value_dtype = find_int_type(np.max(compact_mapping.index_array))
+    index_dtype = find_int_type(np.max(compact_mapping.index_array))
     encoding_compressed = np.ndarray.astype(compact_mapping.encoding_array, dtype=encode_dtype)
-    index_compressed = np.ndarray.astype(compact_mapping.index_array, dtype=value_dtype)
+    index_compressed = np.ndarray.astype(compact_mapping.index_array, dtype=index_dtype)
 
-
+    # save header file for C++ compiler
+    save_header_file(filename, encode_dtype, index_dtype, len(compact_mapping.encoding_array),
+                     len(compact_mapping.params.dims), len(compact_mapping.model_arrays),
+                     [len(v) for v in compact_mapping.model_arrays])
 
     # Save arrays as hdf5 files
     with h5py.File(filename, 'w') as file:
@@ -42,7 +85,7 @@ def save_compact_mapping(compact_mapping, filename):
         # Save mapping
         mapping_group = file.create_group('mapping')
         mapping_group.create_dataset("encoding", data=encoding_compressed, dtype=encode_dtype)
-        mapping_group.create_dataset("indexing", data=index_compressed, dtype=value_dtype)
+        mapping_group.create_dataset("indexing", data=index_compressed, dtype=index_dtype)
         mapping_group.create_dataset("offsets", data=compact_mapping.offsets)
 
         # save parameters
