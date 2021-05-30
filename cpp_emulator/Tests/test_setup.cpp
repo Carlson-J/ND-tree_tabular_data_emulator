@@ -45,13 +45,17 @@ TEST_CASE("Test hdf5 read and write", "[HDF5]"){
 
 TEST_CASE("Load Emulator"){
     // load the emulator
-    Emulator<int, int> emulator("../../Tests/saved_emulator_4d.hdf5");
+    #include "saved_emulator_4d_constants.h"
+    Emulator<ND_TREE_EMULATOR_TYPE> emulator("../../Tests/saved_emulator_4d.hdf5");
+    #undef ND_TREE_EMULATOR_TYPE
 }
 
 TEST_CASE("Interpolation on linear function", "[Interp_4d_linear]"){
     // Load the emulator
     const double EPS = 1e-12;
-    Emulator<int, int> emulator("../../Tests/saved_emulator_4d.hdf5");
+    #include "saved_emulator_4d_constants.h"
+    Emulator<ND_TREE_EMULATOR_TYPE> emulator("../../Tests/saved_emulator_4d.hdf5");
+    #undef ND_TREE_EMULATOR_TYPE
     // create 4d data for interpolation
     const size_t num_points = 4;
     const size_t num_dim = 4;

@@ -12,8 +12,10 @@
 #include <memory>
 #include <algorithm>
 #include <cmath>
+#include <boost/variant.hpp>
 
-template <class encoding_int, class indexing_int>
+template <typename encoding_int, typename indexing_int, size_t num_model_classes, size_t num_dim, size_t num_models,
+        size_t model_array_size>
 class Emulator {
 public:
     Emulator(std::string filename){
@@ -21,7 +23,7 @@ public:
         load_emulator(filename);
         // compute dx
         for (size_t i = 0; i < num_dim; i++){
-            dx.push_back((domain[i][1] - domain[i][0]) / (dims[i] - 1));
+            dx[i] = (domain[i*2 + 1] - domain[i*2 + 0]) / (dims[i] - 1);
         }
         // compute other derived quantities
         weight_offset = std::pow(2, num_dim);
@@ -70,21 +72,21 @@ public:
     }
 
 private:
-    size_t num_dim;
-    size_t num_model_classes;
-    size_t num_models;
     size_t max_depth;
     size_t weight_offset;
-    std::vector<size_t> model_classes;
-    std::vector<double> dx;
-    std::vector<size_t> dims;
-    std::vector<std::vector<double>> domain;
-    std::vector<encoding_int> offsets;
-    std::vector<encoding_int> encoding_array;
-    std::vector<indexing_int> indexing_array;
-    std::vector<std::vector<std::vector<double>>> model_arrays;
+    size_t model_classes[num_model_classes];
+    size_t model_class_weights[num_model_classes];
+    size_t spacing[num_dim];
+    double dx[num_dim];
+    size_t dims[num_dim];
+    double domain[num_dim * 2];
+    size_t offsets[num_model_classes];
+    size_t model_array_offsets[num_model_classes];
+    encoding_int encoding_array[num_models];
+    indexing_int indexing_array[num_models];
+    double model_arrays[model_array_size];
 
-    void load_emulator(const std::string& file_location) {
+    void load_emulator(const std::string& file_location){
         // Load hdf5 file
         HighFive::File file(file_location, HighFive::File::ReadOnly);
 
@@ -92,57 +94,51 @@ private:
         HighFive::Attribute attribute = file.getAttribute("dims");
         // -- dims
         attribute.template read(dims);
-        num_dim = dims.size();
+        assert(num_dim == attribute.getSpace().getElementCount());
+
         // -- domain
         attribute = file.getAttribute("domain");
         attribute.template read(domain);
-        // -- error threshold
-        double error_threshold;
-        attribute = file.getAttribute("error_threshold");
-        attribute.template read(error_threshold);
+        assert(num_dim*2 == attribute.getSpace().getElementCount());
         // -- max depth
         attribute = file.getAttribute("max_depth");
         attribute.template read(max_depth);
-        // -- max test points
-        int max_test_points;
-        attribute = file.getAttribute("max_test_points");
-        attribute.template read(max_test_points);
-        // -- relative error
-        double relative_error;
-        attribute = file.getAttribute("relative_error");
-        attribute.template read(relative_error);
         // -- model classes
         attribute = file.getAttribute("model_classes");
         attribute.template read(model_classes);
+        assert(num_model_classes == attribute.getSpace().getElementCount());
         // -- spacings
-        std::vector<int> spacings;
         attribute = file.getAttribute("spacing");
-        attribute.template read(spacings);
+        attribute.template read(spacing);
+        assert(num_dim == attribute.getSpace().getElementCount());
 
         // Load mapping arrays
         HighFive::Group mapping_group = file.getGroup("mapping");
         // -- encoding array
         HighFive::DataSet dataset = mapping_group.getDataSet("encoding");
         dataset.template read(encoding_array);
+        assert(num_models == dataset.getElementCount());
         // -- indexing array
         dataset = mapping_group.getDataSet("indexing");
         dataset.template read(indexing_array);
+        assert(num_models == dataset.getElementCount());
         // -- offsets array
         dataset = mapping_group.getDataSet("offsets");
         dataset.template read(offsets);
-        num_models = encoding_array.size();
+        assert(num_model_classes == dataset.getElementCount());
 
         // Load model arrays
         HighFive::Group model_group = file.getGroup("models");
-        // -- Create temp array to store it in
         auto model_types = model_group.listObjectNames();
-        num_model_classes = model_types.size();
-        for (const auto &model_name : model_types) {
-            dataset = model_group.getDataSet(model_name);
-            std::vector<std::vector<double>> model_data;
-            dataset.template read(model_data);
-            model_arrays.push_back(model_data);
+        size_t current_offset = 0;
+        for (size_t i = 0; i < num_model_classes; i++) {
+            model_array_offsets[i] = current_offset;
+            dataset = model_group.getDataSet(model_types[i]);
+            dataset.template read(&(model_arrays[current_offset]));
+            current_offset += dataset.getElementCount();
+            model_class_weights[i] = dataset.getDimensions()[1];
         }
+        assert(current_offset == model_array_size);
     }
 
     size_t get_model_index(const double* point){
@@ -154,8 +150,8 @@ private:
         // compute tree index
         encoding_int tree_index = compute_tree_index(point);
         // decode index
-        auto start = encoding_array.begin();
-        auto end = encoding_array.end();
+        auto start = std::begin(encoding_array);
+        auto end = std::end(encoding_array);
         size_t index = std::upper_bound(start, end, tree_index) - start;
         index = indexing_array[index];
         // return index
@@ -166,7 +162,7 @@ private:
         // Compute index of the cell that the point falls in in the tree index space
         size_t cartesian_index[num_dim];
         for (size_t i = 0; i < num_dim; i++){
-            cartesian_index[i] = size_t((point[i] - domain[i][0])/dx[i]);
+            cartesian_index[i] = size_t((point[i] - domain[i*2 + 0])/dx[i]);
             // If the index is outside the domain of the emulator round to the nearest cell.
             cartesian_index[i] = std::max(size_t(0), cartesian_index[i]);
             cartesian_index[i] = std::min(size_t(dims[i] - 2), cartesian_index[i]);
@@ -180,12 +176,15 @@ private:
         }
         return encoding_int(index);
     }
-
     double interp_point(const double* point, const size_t index){
         // Determine which model array to use
-        size_t model_type_index = std::upper_bound(offsets.begin(), offsets.end(), index) - offsets.begin() - 1;
+        auto start = std::begin(offsets);
+        auto stop = std::end(offsets);
+        size_t model_type_index = std::upper_bound(start, stop, index) - start - 1;
         // get model weights
-        std::vector<double>& weights = model_arrays[model_type_index][index - offsets[model_type_index]];
+//        std::vector<double>& weights = model_arrays[model_type_index][index - offsets[model_type_index]];
+        double* weights = &model_arrays[model_array_offsets[model_type_index] + (index - offsets[model_type_index])*
+                                        model_class_weights[model_type_index]];
         // Choose which interpolation scheme to use
         if (model_classes[model_type_index] == MODEL_CLASS_TYPE_ND_LINEAR){
             return nd_linear_interp(point, weights);
@@ -195,7 +194,7 @@ private:
     }
 
     // ------ Model Classes ------ //
-    double nd_linear_interp(const double* point, const std::vector<double>& weight){
+    double nd_linear_interp(const double* point, const double* weight){
         /*
          * do an ND-linear interpolation at the points in X given model weight values.
          * https://math.stackexchange.com/a/1342377
@@ -218,8 +217,7 @@ private:
         }
         return solution;
     }
+
 };
-
-
 
 #endif //CPP_EMULATOR_EMULATOR_H
