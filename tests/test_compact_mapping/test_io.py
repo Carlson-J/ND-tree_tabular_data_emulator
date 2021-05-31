@@ -14,7 +14,7 @@ def test_loading_and_saving():
                         np.array([{'type': 'nd-linear', 'transforms': None}, {'type': 'nd-linear', 'transforms': None}]),
                         10, False, np.array([[0, 1], [5, 2]]))
     compact_mapping = CompactMapping(np.array([1, 4, 6]), np.array([2, 5, 7]), np.array([0, 1]),
-                                     [np.array([1.3, 1.5]), np.array([1.1, 1, 9])], params)
+                                     [np.array([[1.3, 1.5]]), np.array([[1.1, 1, 9]])], params)
 
     # save and load it
     save_compact_mapping(compact_mapping, './test_io.hdf5')

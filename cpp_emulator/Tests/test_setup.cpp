@@ -55,7 +55,6 @@ TEST_CASE("Interpolation on linear function", "[Interp_4d_linear]"){
     const double EPS = 1e-12;
     #include "saved_emulator_4d_constants.h"
     Emulator<ND_TREE_EMULATOR_TYPE> emulator("../../Tests/saved_emulator_4d.hdf5");
-    #undef ND_TREE_EMULATOR_TYPE
     // create 4d data for interpolation
     const size_t num_points = 4;
     const size_t num_dim = 4;
