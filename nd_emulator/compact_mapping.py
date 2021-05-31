@@ -28,8 +28,7 @@ def type_header_conversion(type):
         raise ValueError("Unknown type")
 
 
-def save_header_file(filename, encoding_type, indexing_type, encoding_size,
-                     num_dims, num_model_classes, model_sizes):
+def save_header_file(filename, encoding_type, indexing_type, num_dims, num_model_classes, num_models, model_array_size):
 
     # create file to hold define constants
     if filename[-3:] == '.h5':
@@ -39,15 +38,25 @@ def save_header_file(filename, encoding_type, indexing_type, encoding_size,
     else:
         save_name = filename + "_constants.h"
 
-    identifier = "#define ND_TREE_EMULATOR_"
+    # save template parameters for the given table
     with open(save_name, 'w') as file:
-        file.write(identifier + f"ENCODING_SIZE {encoding_size} \n")
-        file.write(identifier + f"ENCODING_TYPE {type_header_conversion(encoding_type)} \n")
-        file.write(identifier + f"INDEXING_TYPE {type_header_conversion(indexing_type)} \n")
-        file.write(identifier + f"NUM_DIM {num_dims} \n")
-        file.write(identifier + f"NUM_MODEL_CLASSES {num_model_classes} \n")
-        for i in range(num_model_classes):
-            file.write(identifier + f"MODEL_SIZE_{i} {model_sizes[i]} \n")
+        file.write("#undef ND_TREE_EMULATOR_TYPE\n")
+        file.write("#define ND_TREE_EMULATOR_TYPE ")
+        file.write(f"{type_header_conversion(encoding_type)}, ")
+        file.write(f"{type_header_conversion(indexing_type)}, ")
+        file.write(f"{num_model_classes}, ")
+        file.write(f"{num_dims}, ")
+        file.write(f"{num_models}, ")
+        file.write(f"{model_array_size}")
+    #
+    # identifier = "#define ND_TREE_EMULATOR_"
+    #     file.write(identifier + f"ENCODING_SIZE {encoding_size} \n")
+    #     file.write(identifier + f"ENCODING_TYPE {type_header_conversion(encoding_type)} \n")
+    #     file.write(identifier + f"INDEXING_TYPE {type_header_conversion(indexing_type)} \n")
+    #     file.write(identifier + f"NUM_DIM {num_dims} \n")
+    #     file.write(identifier + f"NUM_MODEL_CLASSES {num_model_classes} \n")
+    #     for i in range(num_model_classes):
+    #         file.write(identifier + f"MODEL_SIZE_{i} {model_sizes[i]} \n")
 
 def save_compact_mapping(compact_mapping, filename):
     """
@@ -63,9 +72,9 @@ def save_compact_mapping(compact_mapping, filename):
     index_compressed = np.ndarray.astype(compact_mapping.index_array, dtype=index_dtype)
 
     # save header file for C++ compiler
-    save_header_file(filename, encode_dtype, index_dtype, len(compact_mapping.encoding_array),
-                     len(compact_mapping.params.dims), len(compact_mapping.model_arrays),
-                     [len(v) for v in compact_mapping.model_arrays])
+    save_header_file(filename, encode_dtype, index_dtype, len(compact_mapping.params.dims),
+                     len(compact_mapping.model_arrays), sum([len(v) for v in compact_mapping.model_arrays]),
+                     sum([sum([len(model) for model in v]) for v in compact_mapping.model_arrays]))
 
     # Save arrays as hdf5 files
     with h5py.File(filename, 'w') as file:

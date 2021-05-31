@@ -5,6 +5,8 @@ from .compact_mapping import convert_tree
 from .model_classes import nd_linear_model
 from .compact_mapping import CompactMapping, save_compact_mapping
 from .parameter_struct import Parameters
+import ctypes
+from numpy.ctypeslib import ndpointer
 
 
 def build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, max_test_points=100,
@@ -59,14 +61,6 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
     emulator = Emulator(compact_mapping)
 
     return emulator
-
-
-def load_emulator(file_path):
-    """
-    Loads an ND_Tree emulator from an hdf5 file
-    :param file_path: (string) path to save file
-    :return:
-    """
 
 
 class Emulator:
@@ -166,3 +160,51 @@ class Emulator:
         :return:
         """
         save_compact_mapping(self.get_compact_mapping(), filename)
+
+
+class EmulatorCpp:
+    def __init__(self, filename, extern_name, extern_lib_location):
+        """
+        A wrapper class for the C++ version of the emulator.
+        An extern function needs to be built for each emulator.
+        The emulator will use this data to map inputs to correct cells and perform the corresponding interpolation
+        in the cell.
+        :param filename: (string) Location of hdf5 file that holds the info needed to construct the emulator.
+        :param extern_name: (string) name of the extern C function that goes along with the emulator
+        """
+        # Load C++ emulator
+        self.lib = ctypes.cdll.LoadLibrary(extern_lib_location)
+        self.setup_emulator = eval(f'self.lib.{extern_name}_setup_emulator')
+        self.interpolate = eval(f'self.lib.{extern_name}_interpolate')
+        self.free = eval(f'self.lib.{extern_name}_free_emulator')
+
+        # set input and output type
+        self.setup_emulator.argtypes = [ctypes.c_char_p]
+        self.interpolate.argtypes = [ctypes.c_void_p, ndpointer(dtype=np.uintp, ndim=1, flags='C'), ctypes.c_size_t,
+                                ctypes.POINTER(ctypes.c_double)]
+
+        # load emulator
+        self.emulator = self.setup_emulator(filename.encode("UTF-8"))
+
+    def __del__(self):
+        """
+        Destructor for emulator. This is needed to free the memory used by the C++ objects.
+        :return:
+        """
+        self.free(self.emulator)
+
+    def __call__(self, inputs):
+        """
+        Compute the  interpolated values at each point in the input array.
+        :param inputs: (2d array) each row is a different point
+        :return: (array) the function value at each point.
+        """
+        # allocate memory to work in
+        num_points = inputs.shape[0]
+        output = (ctypes.c_double * num_points)()
+        # construct 2d array for C++ function
+        double_pointer_2d = (inputs.__array_interface__['data'][0] + np.arange(inputs.shape[0])*inputs.strides[0]).astype(np.uintp)
+        # do interpolation
+        self.interpolate(self.emulator, double_pointer_2d, ctypes.c_size_t(num_points), output)
+
+        return np.array(output)
