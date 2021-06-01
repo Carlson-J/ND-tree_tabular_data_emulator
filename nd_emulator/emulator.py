@@ -3,7 +3,7 @@ from .domain_functions import transform_domain, transform_point
 from .dtree import DTree
 from .compact_mapping import convert_tree
 from .model_classes import nd_linear_model
-from .compact_mapping import CompactMapping, save_compact_mapping
+from .compact_mapping import CompactMapping, save_compact_mapping, load_compact_mapping
 from .parameter_struct import Parameters
 import ctypes
 from numpy.ctypeslib import ndpointer
@@ -61,6 +61,18 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
     emulator = Emulator(compact_mapping)
 
     return emulator
+
+
+def load_emulator(filename):
+    """
+    Load the emulator from a saved compact mapping.
+    :param filename: (string) location of the hdf5 file
+    :return: (Emulator)
+    """
+    # load compact mapping
+    compact_mapping = load_compact_mapping(filename)
+    # create emulator
+    return Emulator(compact_mapping)
 
 
 class Emulator:
