@@ -212,9 +212,10 @@ class EmulatorCpp:
         :return: (array) the function value at each point.
         """
         # allocate memory to work in
-        num_points = inputs.shape[0]
+        num_points = inputs.shape[1]
         output = (ctypes.c_double * num_points)()
         # construct 2d array for C++ function
+        # transform inputs
         double_pointer_2d = (inputs.__array_interface__['data'][0] + np.arange(inputs.shape[0])*inputs.strides[0]).astype(np.uintp)
         # do interpolation
         self.interpolate(self.emulator, double_pointer_2d, ctypes.c_size_t(num_points), output)
