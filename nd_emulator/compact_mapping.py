@@ -58,6 +58,7 @@ def save_header_file(filename, encoding_type, indexing_type, num_dims, num_model
     #     for i in range(num_model_classes):
     #         file.write(identifier + f"MODEL_SIZE_{i} {model_sizes[i]} \n")
 
+
 def save_compact_mapping(compact_mapping, filename):
     """
     Save the compact mapping array in an hdf5 file.
