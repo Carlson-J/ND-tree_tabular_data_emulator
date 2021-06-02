@@ -170,7 +170,7 @@ private:
         size_t index = 0;
         for (size_t i = 0; i < max_depth; i++){
             for (size_t j = 0; j < num_dim; j++){
-                index = (index << 1) | ((cartesian_index[num_dim - j] >> (max_depth - i - 1)) & 1);
+                index = (index << 1) | ((cartesian_index[num_dim - 1 - j] >> (max_depth - i - 1)) & 1);
             }
         }
         return encoding_int(index);
@@ -188,7 +188,7 @@ private:
         if (model_classes[model_type_index] == MODEL_CLASS_TYPE_ND_LINEAR){
             return nd_linear_interp(point, weights);
         } else{
-            throw std::exception(), "Model class not implemented yet";
+            throw std::exception(); //"Model class not implemented yet"
         }
     }
 

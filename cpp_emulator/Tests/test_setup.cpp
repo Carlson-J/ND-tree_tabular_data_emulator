@@ -56,21 +56,46 @@ TEST_CASE("Interpolation on linear function", "[Interp_4d_linear]"){
     #include "saved_emulator_4d_constants.h"
     Emulator<ND_TREE_EMULATOR_TYPE> emulator("../../Tests/saved_emulator_4d.hdf5");
     // create 4d data for interpolation
-    const size_t num_points = 4;
-    const size_t num_dim = 4;
-    double x0[num_points] = {0.0, 0.3, 0.6, 0.4};
-    double x1[num_points] = {0.0, 1.3, 0.1, 2.0};
-    double x2[num_points] = {0.0, 3.0, 2.8, 0.1};
-    double x3[num_points] = {0.0, 0.0, 4.0, 5.1};
+    const size_t NUM_POINTS = 4;
+    const size_t NUM_DIM = 4;
+    double x0[NUM_POINTS] = {0.0, 0.3, 0.6, 0.4};
+    double x1[NUM_POINTS] = {0.0, 1.3, 0.1, 2.0};
+    double x2[NUM_POINTS] = {0.0, 3.0, 2.8, 0.1};
+    double x3[NUM_POINTS] = {0.0, 0.0, 4.0, 5.1};
     // Create array of pointers to point to each array
-    double* points[num_dim] = {x0, x1, x2, x3};
+    double* points[NUM_DIM] = {x0, x1, x2, x3};
     // Create array for solution
-    double sol[num_points] = {0};
+    double sol[NUM_POINTS] = {0};
     // do interpolation on 4d data
-    emulator.interpolate(points, num_points, sol);
+    emulator.interpolate(points, NUM_POINTS, sol);
     // check if results are correct
-    for (size_t i = 0; i < num_points; i++){
+    for (size_t i = 0; i < NUM_POINTS; i++){
         double sol_true = x0[i] + x1[i] + x2[i] + x3[i] + 1.0;
         REQUIRE(std::fabs(sol[i] - sol_true) < EPS);
     }
 }
+
+//TEST_CASE("Interpolation on linear function", "[Interp_4d_linear]"){
+//    // Load the emulator
+//    const double EPS = 1e-12;
+//#include "saved_emulator_4d_constants.h"
+//    Emulator<ND_TREE_EMULATOR_TYPE> emulator("../../Tests/saved_emulator_4d.hdf5");
+//    // create 4d data for interpolation
+//    const size_t num_points = 4;
+//    const size_t num_dim = 4;
+//    double x0[num_points] = {0.0, 0.3, 0.6, 0.4};
+//    double x1[num_points] = {0.0, 1.3, 0.1, 2.0};
+//    double x2[num_points] = {0.0, 3.0, 2.8, 0.1};
+//    double x3[num_points] = {0.0, 0.0, 4.0, 5.1};
+//    // Create array of pointers to point to each array
+//    double* points[num_dim] = {x0, x1, x2, x3};
+//    // Create array for solution
+//    double sol[num_points] = {0};
+//    // do interpolation on 4d data
+//    emulator.interpolate(points, num_points, sol);
+//    // check if results are correct
+//    for (size_t i = 0; i < num_points; i++){
+//        double sol_true = x0[i] + x1[i] + x2[i] + x3[i] + 1.0;
+//        REQUIRE(std::fabs(sol[i] - sol_true) < EPS);
+//    }
+//}

@@ -76,7 +76,7 @@ if __name__ == "__main__":
     # -- Put include file that is needed to compile the library for the specific table
     shutil.copy(save_directory + '/' + emulator_name + "_cpp_params.h", 'cpp_emulator/emulator/table_params.h')
     # -- Create build files
-    cmakeCmd = ["cmake", '-S', './cpp_emulator', '-B', tmp_dir]
+    cmakeCmd = ["cmake", '-S', './cpp_emulator', '-B', tmp_dir, '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
     subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell)
     # -- build C++ code
     cmakeCmd = ["cmake", '--build', tmp_dir, '--target', 'ND_emulator_lib']
@@ -85,6 +85,20 @@ if __name__ == "__main__":
     shutil.copy(tmp_dir + '/libND_emulator_lib.so', save_directory + f'/{emulator_name}_lib.so')
 
     # create readme file with the names of the function calls to used with the shared libraries
-    # with open(save_directory + '/README.md', 'w') as file:
+    with open(save_directory + '/README.md', 'w') as file:
+        str = f"""# README for the *{emulator_name}* emulator
+This folder should contain three file, 
+    *{emulator_name}_table.hdf5*: Contains the data for the compact emulator
+    *{emulator_name}_cpp_params.h*: Contains the #define's used when creating the C++ lib
+    *{emulator_name}_lib.so*: C++ lib that has C extern functions that can be called to make, use, and destroy the
+        emulator. 
+        
+The function names in *{emulator_name}_lib.so* that can be called are named based on the emulators name and are as follows:
+    *{emulator_name}_emulator_setup*: Constructs an emulator C++ object.
+    *{emulator_name}_emulator_interpolate*: Calls the emulator object for interpolation.
+    *{emulator_name}_emulator_free*: Frees the memory allocated by *{emulator_name}_emulator_setup*.
+
+"""
+        file.write(str)
 
     print('done')
