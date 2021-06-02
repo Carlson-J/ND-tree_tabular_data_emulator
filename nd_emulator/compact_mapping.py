@@ -28,15 +28,16 @@ def type_header_conversion(type):
         raise ValueError("Unknown type")
 
 
-def save_header_file(filename, encoding_type, indexing_type, num_dims, num_model_classes, num_models, model_array_size):
+def save_header_file(folder_path, emulator_name, encoding_type, indexing_type, num_dims, num_model_classes, num_models, model_array_size):
 
     # create file to hold define constants
+    filename = folder_path + '/' + emulator_name
     if filename[-3:] == '.h5':
-        save_name = filename[:-3] + "_constants.h"
+        save_name = filename[:-3] + "_cpp_params.h"
     elif filename[-5:] == '.hdf5':
-        save_name = filename[:-5] + "_constants.h"
+        save_name = filename[:-5] + "_cpp_params.h"
     else:
-        save_name = filename + "_constants.h"
+        save_name = filename + "_cpp_params.h"
 
     # save template parameters for the given table
     with open(save_name, 'w') as file:
@@ -47,23 +48,19 @@ def save_header_file(filename, encoding_type, indexing_type, num_dims, num_model
         file.write(f"{num_model_classes}, ")
         file.write(f"{num_dims}, ")
         file.write(f"{num_models}, ")
-        file.write(f"{model_array_size}")
-    #
-    # identifier = "#define ND_TREE_EMULATOR_"
-    #     file.write(identifier + f"ENCODING_SIZE {encoding_size} \n")
-    #     file.write(identifier + f"ENCODING_TYPE {type_header_conversion(encoding_type)} \n")
-    #     file.write(identifier + f"INDEXING_TYPE {type_header_conversion(indexing_type)} \n")
-    #     file.write(identifier + f"NUM_DIM {num_dims} \n")
-    #     file.write(identifier + f"NUM_MODEL_CLASSES {num_model_classes} \n")
-    #     for i in range(num_model_classes):
-    #         file.write(identifier + f"MODEL_SIZE_{i} {model_sizes[i]} \n")
+        file.write(f"{model_array_size}\n")
+        # create function name stuff
+        file.write(f"#define ND_TREE_EMULATOR_NAME_SETUP {emulator_name}_emulator_setup\n")
+        file.write(f"#define ND_TREE_EMULATOR_NAME_INTERPOLATE {emulator_name}_emulator_interpolate\n")
+        file.write(f"#define ND_TREE_EMULATOR_NAME_FREE {emulator_name}_emulator_free\n")
 
 
-def save_compact_mapping(compact_mapping, filename):
+def save_compact_mapping(compact_mapping, folder_path, emulator_name):
     """
     Save the compact mapping array in an hdf5 file.
     :param compact_mapping: (CompactMapping)
-    :param filename: (str)
+    :param folder_path: (str)
+    :param emulator_name: (str)
     :return:
     """
     # Save the mapping using the smallest int size needed.
@@ -73,11 +70,12 @@ def save_compact_mapping(compact_mapping, filename):
     index_compressed = np.ndarray.astype(compact_mapping.index_array, dtype=index_dtype)
 
     # save header file for C++ compiler
-    save_header_file(filename, encode_dtype, index_dtype, len(compact_mapping.params.dims),
+    save_header_file(folder_path, emulator_name, encode_dtype, index_dtype, len(compact_mapping.params.dims),
                      len(compact_mapping.model_arrays), sum([len(v) for v in compact_mapping.model_arrays]),
                      sum([sum([len(model) for model in v]) for v in compact_mapping.model_arrays]))
 
     # Save arrays as hdf5 files
+    filename = folder_path + '/' + emulator_name + '_table.hdf5'
     with h5py.File(filename, 'w') as file:
         # Save models
         model_group = file.create_group('models')

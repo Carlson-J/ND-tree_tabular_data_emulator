@@ -17,8 +17,8 @@ def test_loading_and_saving():
                                      [np.array([[1.3, 1.5]]), np.array([[1.1, 1, 9]])], params)
 
     # save and load it
-    save_compact_mapping(compact_mapping, './test_io.hdf5')
-    compact_mapping_new = load_compact_mapping('./test_io.hdf5')
+    save_compact_mapping(compact_mapping, '.', 'test_io')
+    compact_mapping_new = load_compact_mapping('./test_io_table.hdf5')
 
     # compare things
     assert np.all(compact_mapping.offsets == compact_mapping_new.offsets)

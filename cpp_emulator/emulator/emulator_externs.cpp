@@ -2,16 +2,16 @@
 // Created by jared on 5/31/2021.
 //
 #include "emulator.h"
-#include "../Tests/saved_emulator_4d_constants.h"
+#include "table_params.h"
+
 extern "C" {
-    Emulator<ND_TREE_EMULATOR_TYPE>* linear4d_setup_emulator(const char* filename) {
-        std::cout << filename << std::endl;
+    Emulator<ND_TREE_EMULATOR_TYPE>* ND_TREE_EMULATOR_NAME_SETUP(const char* filename) {
         return new Emulator<ND_TREE_EMULATOR_TYPE>(filename);
     }
-    void linear4d_interpolate(Emulator<ND_TREE_EMULATOR_TYPE>* emulator, double** points, size_t num_points, double* return_array) {
+    void ND_TREE_EMULATOR_NAME_INTERPOLATE(Emulator<ND_TREE_EMULATOR_TYPE>* emulator, double** points, size_t num_points, double* return_array) {
         emulator->interpolate(points, num_points, return_array);
     }
-    void linear4d_free_emulator(Emulator<ND_TREE_EMULATOR_TYPE>* emulator){
+    void ND_TREE_EMULATOR_NAME_FREE(Emulator<ND_TREE_EMULATOR_TYPE>* emulator){
         free(emulator);
     }
 }

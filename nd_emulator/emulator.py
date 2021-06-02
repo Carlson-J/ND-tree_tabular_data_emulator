@@ -165,13 +165,14 @@ class Emulator:
         """
         return CompactMapping(self.encoding_array, self.index_array, self.offsets, self.model_arrays, self.params)
 
-    def save(self, filename):
+    def save(self, folder_path, emulator_name):
         """
         save emulator using compact encoding scheme
-        :param filename: (str) location of file
+        :param folder_path: (str) location of folder to save emulator in
+        :param emulator_name: (str) name of emulator
         :return:
         """
-        save_compact_mapping(self.get_compact_mapping(), filename)
+        save_compact_mapping(self.get_compact_mapping(), folder_path, emulator_name)
 
 
 class EmulatorCpp:

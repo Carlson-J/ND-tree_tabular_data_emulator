@@ -60,7 +60,8 @@ def test_basic_4d(dataset_4d):
         THEN: Emulator produces same values before and after
         """
     EPS = 10 ** -14
-    SAVE_LOCATION = './saved_emulator_4d.hdf5'
+    SAVE_NAME = 'saved_emulator_4d'
+    SAVE_LOC = '.'
     data, domain, spacing = dataset_4d
     error_threshold = 0
     max_depth = 2
@@ -79,7 +80,7 @@ def test_basic_4d(dataset_4d):
         sol = sum(point) + 1
         assert(abs(output[i] - sol) <= EPS)
     # save it
-    emulator.save(SAVE_LOCATION)
+    emulator.save(SAVE_LOC, SAVE_NAME)
 
 
 def test_saving_nd_tree(dataset_4d_log):
@@ -89,7 +90,8 @@ def test_saving_nd_tree(dataset_4d_log):
     THEN: Emulator produces same values before and after
     """
     EPS = 10 ** -15
-    SAVE_LOCATION = './saved_emulator.hdf5'
+    SAVE_NAME = 'saved_emulator'
+    SAVE_LOC = '.'
     data, domain, spacing = dataset_4d_log
     error_threshold = 0
     max_depth = 2
@@ -99,7 +101,7 @@ def test_saving_nd_tree(dataset_4d_log):
     inputs = np.random.uniform(0.1, 0.5, size=[100, len(spacing)])
     output_true = emulator(inputs)
     # save it
-    emulator.save(SAVE_LOCATION)
+    emulator.save(SAVE_LOC, SAVE_NAME)
 
 
 def test_1d_interpolation():

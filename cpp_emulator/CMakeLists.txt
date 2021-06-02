@@ -7,19 +7,17 @@ add_subdirectory(HighFive)
 include_directories(emulator)
 
 add_executable(cpp_emulator main.cpp)
-add_compile_options(-DHIGHFIVE_USE_BOOST=ON)
+add_compile_options(-DHIGHFIVE_USE_BOOST=OFF)
 target_link_libraries(cpp_emulator HighFive)
 
 add_subdirectory(Tests)
 
 # Create library for emulator
-project(ND_emulator_lib VERSION 1.0.0 DESCRIPTION "library for using the ND tree emulator")
+project(ND_emulator_lib DESCRIPTION "library for using the ND tree emulator")
 add_library(ND_emulator_lib SHARED ./emulator/emulator_externs.cpp ./emulator/emulator.h)
 target_link_libraries(ND_emulator_lib HighFive)
 
-set_target_properties(ND_emulator_lib PROPERTIES VERSION ${PROJECT_VERSION})
 set_target_properties(ND_emulator_lib PROPERTIES LINKER_LANGUAGE CXX)
-set_target_properties(ND_emulator_lib PROPERTIES SOVERSION 1)
 #set_target_properties(ND_emulator_lib PROPERTIES PUBLIC_HEADER ./emulator.h)
 
 #include(GNUInstallDirs)

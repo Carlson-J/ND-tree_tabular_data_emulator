@@ -12,7 +12,6 @@
 #include <memory>
 #include <algorithm>
 #include <cmath>
-#include <boost/variant.hpp>
 
 template <typename encoding_int, typename indexing_int, size_t num_model_classes, size_t num_dim, size_t num_models,
         size_t model_array_size>
