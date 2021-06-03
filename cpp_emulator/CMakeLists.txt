@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(cpp_emulator)
+project(profiler)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -Wall -Wextra")
@@ -7,9 +7,9 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -Wall -Wextra")
 add_subdirectory(HighFive)
 include_directories(emulator)
 
-add_executable(cpp_emulator main.cpp)
+add_executable(profiler profiler/main.cpp)
 add_compile_options(-DHIGHFIVE_USE_BOOST=OFF)
-target_link_libraries(cpp_emulator HighFive)
+target_link_libraries(profiler HighFive)
 
 add_subdirectory(Tests)
 
