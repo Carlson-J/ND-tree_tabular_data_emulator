@@ -1,8 +1,12 @@
-from nd_emulator import build_emulator, EmulatorCpp, load_emulator
+from nd_emulator import build_emulator, EmulatorCpp, load_emulator, make_cpp_emulator
 import pytest
 import numpy as np
 import matplotlib.pyplot as plt
 from time import time
+import subprocess
+import sys
+import shutil
+import os
 
 
 @pytest.mark.dependency()
@@ -227,6 +231,8 @@ def test_4d_convergence(dataset_4d_log_non_linear):
     # check if error is low
     assert np.all(l1_error[-1] <= EPS)
 
+
+@pytest.mark.dependency()
 def test_2d_log_transforms(dataset_2d_log_non_linear):
     """
     GIVEN: 2d function evaluations and a domain.
@@ -259,23 +265,29 @@ def test_2d_log_transforms(dataset_2d_log_non_linear):
     assert np.all(error <= EPS)
 
 
+@pytest.mark.dependency(depends=["test_2d_log_transforms"])
 def test_cpp_emulator():
+    save_directory = '.'
+    emulator_name = 'non_linear2d'
+    cpp_source_dir = '../../cpp_emulator'
+    make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
+
     EPS = 10**-10
     # load CPP emulator
-    emulator_cpp = EmulatorCpp("./saved_emulator_4d.hdf5", "linear4d", "./libND_emulator_lib.so.1.0.0")
+    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
+                               save_directory + '/' + emulator_name + "_lib.so")
 
     # load python emulator
-    emulator_py = load_emulator("./saved_emulator_4d.hdf5")
+    emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")
 
     # create test data
     domain = emulator_py.params.domain
     low = np.array(domain)[:, 0]
     high = np.array(domain)[:, 1]
     N = 100
-    inputs = np.zeros([4, N])
-    for i in range(4):
+    inputs = np.zeros([len(domain[:, 0]), N])
+    for i in range(len(domain[:, 0])):
         inputs[i, :] = np.random.uniform(low[i], high[i], size=[N])
-    f_true = inputs[0, :] + inputs[1, :] + inputs[2, :] + inputs[3, :] + 1.0
 
     # time the evaluation of both methods
     # # Python

@@ -7,6 +7,10 @@ from .compact_mapping import CompactMapping, save_compact_mapping, load_compact_
 from .parameter_struct import Parameters
 import ctypes
 from numpy.ctypeslib import ndpointer
+import subprocess
+import sys
+import shutil
+import os
 
 
 def build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, max_test_points=100,
@@ -187,9 +191,9 @@ class EmulatorCpp:
         """
         # Load C++ emulator
         self.lib = ctypes.cdll.LoadLibrary(extern_lib_location)
-        self.setup_emulator = eval(f'self.lib.{extern_name}_setup_emulator')
-        self.interpolate = eval(f'self.lib.{extern_name}_interpolate')
-        self.free = eval(f'self.lib.{extern_name}_free_emulator')
+        self.setup_emulator = eval(f'self.lib.{extern_name}_emulator_setup')
+        self.interpolate = eval(f'self.lib.{extern_name}_emulator_interpolate')
+        self.free = eval(f'self.lib.{extern_name}_emulator_free')
 
         # set input and output type
         self.setup_emulator.argtypes = [ctypes.c_char_p]
@@ -222,3 +226,52 @@ class EmulatorCpp:
         self.interpolate(self.emulator, double_pointer_2d, ctypes.c_size_t(num_points), output)
 
         return np.array(output)
+
+
+def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
+    """
+    Craete the cpp library for the emulator. The save directory should have the *_cpp_params.h file in it already.
+    :param save_directory: (str) where the params and table files are located and where to save the lib file
+    :param emulator_name: (str) name of the emulator
+    :param cpp_source_dir: (str) the location of the cpp_emulator directory
+    :return:
+    """
+    assert(os.path.isfile(save_directory + '/' + emulator_name + "_cpp_params.h"))
+    # create C++ shared library to accompany it
+    # -- Create tmp build directory (the old one will be removed)
+    tmp_dir = "./tmp"
+    if os.path.isdir(tmp_dir):
+        shutil.rmtree(tmp_dir)
+    os.makedirs(tmp_dir)
+    # -- create build files using cmake
+    if sys.platform.startswith('win'):
+        shell = True
+    else:
+        shell = False
+    # -- Put include file that is needed to compile the library for the specific table
+    shutil.copy(save_directory + '/' + emulator_name + "_cpp_params.h", cpp_source_dir +'/emulator/table_params.h')
+    # -- Create build files
+    cmakeCmd = ["cmake", '-S', cpp_source_dir, '-B', tmp_dir, '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
+    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell)
+    # -- build C++ code
+    cmakeCmd = ["cmake", '--build', tmp_dir, '--target', 'ND_emulator_lib']
+    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell)
+    # -- move C++ library to install folder
+    shutil.copy(tmp_dir + '/libND_emulator_lib.so', save_directory + f'/{emulator_name}_lib.so')
+
+    # create readme file with the names of the function calls to used with the shared libraries
+    with open(save_directory + '/README.md', 'w') as file:
+        str = f"""# README for the *{emulator_name}* emulator
+    This folder should contain three file, 
+        *{emulator_name}_table.hdf5*: Contains the data for the compact emulator
+        *{emulator_name}_cpp_params.h*: Contains the #define's used when creating the C++ lib
+        *{emulator_name}_lib.so*: C++ lib that has C extern functions that can be called to make, use, and destroy the
+            emulator. 
+
+    The function names in *{emulator_name}_lib.so* that can be called are named based on the emulators name and are as follows:
+        *{emulator_name}_emulator_setup*: Constructs an emulator C++ object.
+        *{emulator_name}_emulator_interpolate*: Calls the emulator object for interpolation.
+        *{emulator_name}_emulator_free*: Frees the memory allocated by *{emulator_name}_emulator_setup*.
+
+    """
+        file.write(str)
