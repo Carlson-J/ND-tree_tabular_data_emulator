@@ -1,0 +1,3 @@
+[submodule "cpp_emulator/HighFive"]
+	path = cpp_emulator/HighFive
+	url = https://github.com/BlueBrain/HighFive.git
