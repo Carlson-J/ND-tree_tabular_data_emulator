@@ -20,9 +20,13 @@ public:
     Emulator(std::string filename){
         std::cout << "Loading emulator" << std::endl;
         load_emulator(filename);
+        // do domain tranform
+        for (size_t i = 0; i < num_dim; i++){
+            domain_transform(&domain[i*2], i, 2);
+        }
         // compute dx
         for (size_t i = 0; i < num_dim; i++){
-            dx[i] = (domain[i*2 + 1] - domain[i*2 + 0]) / (dims[i] - 1);
+            dx[i] = (domain[i*2 + 1] - domain[i*2 + 0]) / (pow(2, max_depth));
         }
         // compute other derived quantities
         weight_offset = std::pow(2, num_dim);
@@ -55,6 +59,8 @@ public:
             double point[num_dim];
             for (size_t j = 0; j < num_dim; j++){
                 point[j] = points[j][i];
+                // Do any needed domain transforms
+                domain_transform(&point[j], j, 1);
             }
             mapping_array[i] = get_model_index(point);
         }
@@ -66,8 +72,6 @@ public:
             }
             return_array[i] = interp_point(point, mapping_array[i]);
         }
-
-
     }
 
 private:
@@ -77,7 +81,6 @@ private:
     size_t model_class_weights[num_model_classes];
     size_t spacing[num_dim];
     double dx[num_dim];
-    size_t dims[num_dim];
     double domain[num_dim * 2];
     size_t offsets[num_model_classes];
     size_t model_array_offsets[num_model_classes];
@@ -85,18 +88,24 @@ private:
     indexing_int indexing_array[num_models];
     double model_arrays[model_array_size];
 
+    void domain_transform(double* dim_array, size_t dim, size_t num_vars){
+        if (spacing[dim] == 0){
+            return;
+        } else if (spacing[dim] == 1){
+            for (size_t j = 0; j < num_vars; j++){
+                dim_array[j] = log10(dim_array[j]);
+            }
+        } else {
+            throw std::out_of_range ("No valid spacing implemented");
+        }
+    }
+
     void load_emulator(const std::string& file_location){
         // Load hdf5 file
         HighFive::File file(file_location, HighFive::File::ReadOnly);
 
-        // Load the attributes of the emulator
-        HighFive::Attribute attribute = file.getAttribute("dims");
-        // -- dims
-        attribute.template read(dims);
-        assert(num_dim == attribute.getSpace().getElementCount());
-
         // -- domain
-        attribute = file.getAttribute("domain");
+        HighFive::Attribute attribute = file.getAttribute("domain");
         attribute.template read(domain);
         assert(num_dim*2 == attribute.getSpace().getElementCount());
         // -- max depth
@@ -129,7 +138,7 @@ private:
         // Load model arrays
         HighFive::Group model_group = file.getGroup("models");
         auto model_types = model_group.listObjectNames();
-        size_t current_offset = 0;
+        auto current_offset = 0;
         for (size_t i = 0; i < num_model_classes; i++) {
             model_array_offsets[i] = current_offset;
             dataset = model_group.getDataSet(model_types[i]);
@@ -140,7 +149,7 @@ private:
         assert(current_offset == model_array_size);
     }
 
-    size_t get_model_index(const double* point){
+    indexing_int get_model_index(const double* point){
         /*
          * point: point in num_dim space.
          *
@@ -151,10 +160,8 @@ private:
         // decode index
         auto start = std::begin(encoding_array);
         auto end = std::end(encoding_array);
-        size_t index = std::upper_bound(start, end, tree_index) - start;
-        index = indexing_array[index];
-        // return index
-        return index;
+        auto index = std::upper_bound(start, end, tree_index) - start;
+        return indexing_array[index];
     }
 
     encoding_int compute_tree_index(const double* point){
@@ -164,7 +171,7 @@ private:
             cartesian_index[i] = size_t((point[i] - domain[i*2 + 0])/dx[i]);
             // If the index is outside the domain of the emulator round to the nearest cell.
             cartesian_index[i] = std::max(size_t(0), cartesian_index[i]);
-            cartesian_index[i] = std::min(size_t(dims[i] - 2), cartesian_index[i]);
+            cartesian_index[i] = std::min(size_t(pow(2, max_depth) - 1), cartesian_index[i]);
         }
         // convert to tree index space
         size_t index = 0;

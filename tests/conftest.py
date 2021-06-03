@@ -65,7 +65,7 @@ def dataset_2d_log_non_linear():
     X0, X1 = np.meshgrid(x0, x1, indexing='ij')
 
     return {
-               'f': X0 + np.log10(X1)
+               'f': X0 * np.log10(X1)
            }, domain, spacing
 
 

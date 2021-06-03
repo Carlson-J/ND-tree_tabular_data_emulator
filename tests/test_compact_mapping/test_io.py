@@ -28,7 +28,6 @@ def test_loading_and_saving():
         assert np.all(compact_mapping.model_arrays[i] == compact_mapping_new.model_arrays[i])
     assert np.all(compact_mapping.params.max_depth == compact_mapping_new.params.max_depth)
     assert np.all(compact_mapping.params.spacing == compact_mapping_new.params.spacing)
-    assert np.all(compact_mapping.params.dims == compact_mapping_new.params.dims)
     assert np.all(compact_mapping.params.error_threshold == compact_mapping_new.params.error_threshold)
     for i in range(len(compact_mapping.params.model_classes)):
         assert np.all(compact_mapping.params.model_classes[i]['type'] == compact_mapping_new.params.model_classes[i]['type'])

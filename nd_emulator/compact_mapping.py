@@ -99,7 +99,6 @@ def save_compact_mapping(compact_mapping, folder_path, emulator_name):
         # save parameters
         file.attrs['max_depth'] = compact_mapping.params.max_depth
         file.attrs['spacing'] = [SPACING_TYPES.index(s) for s in compact_mapping.params.spacing]
-        file.attrs['dims'] = compact_mapping.params.dims
         file.attrs['error_threshold'] = compact_mapping.params.error_threshold
         file.attrs['model_classes'] = [MODEL_CLASS_TYPES.index(s['type']) for s in compact_mapping.params.model_classes]
         file.attrs['max_test_points'] = compact_mapping.params.max_test_points
@@ -145,14 +144,13 @@ def load_compact_mapping(filename, return_file_size=False):
         # load parameters
         max_depth = file.attrs['max_depth']
         spacing = [SPACING_TYPES[s] for s in file.attrs['spacing']]
-        dims = file.attrs['dims']
         error_threshold = file.attrs['error_threshold']
         model_classes = [{'type':MODEL_CLASS_TYPES[s]} for s in file.attrs['model_classes']]
         max_test_points = file.attrs['max_test_points']
         relative_error = file.attrs['relative_error']
         domain = file.attrs['domain']
-        params = Parameters(max_depth, np.array(spacing), np.array(dims), error_threshold, np.array(model_classes),
-                            max_test_points, relative_error, np.array(domain))
+        params = Parameters(max_depth, np.array(spacing), np.array([2**max_depth for i in range(len(spacing))]),
+                            error_threshold, np.array(model_classes), max_test_points, relative_error, np.array(domain))
         file.close()
 
     # Return compact emulator

@@ -227,35 +227,36 @@ def test_4d_convergence(dataset_4d_log_non_linear):
     # check if error is low
     assert np.all(l1_error[-1] <= EPS)
 
-# def test_2d_log_transforms(dataset_2d_log_non_linear):
-#     """
-#     GIVEN: 2d function evaluations and a domain.
-#     WHEN: Create an emulator from data with log transforms
-#     THEN: Correctly sorts and interpolates data
-#     """
-#     EPS = 10 ** -14
-#     N = 200
-#     data, domain, spacing = dataset_2d_log_non_linear
-#     error_threshold = 0
-#     max_depth = 2
-#     model_classes = [{'type': 'nd-linear', 'transforms': [None, 'log']}]
-#     # Create emulator
-#     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
-#     # Compute new values over domain
-#     X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.logspace(np.log10(domain[1][0])
-#                                                                                , np.log10(domain[1][1]), N))
-#     input = np.array([X.flatten(), Y.flatten()]).T
-#     f_interp = emulator(input).reshape([N, N])
-#     f_true = X * Y
-#     error = abs(f_true - f_interp)
-#     # resize and plot
-#     plt.imshow(error, origin='lower')
-#     plt.title("Should not see any grid structure")
-#     plt.colorbar()
-#     plt.show()
-#
-#     # check if error is low
-#     assert np.all(error <= EPS)
+def test_2d_log_transforms(dataset_2d_log_non_linear):
+    """
+    GIVEN: 2d function evaluations and a domain.
+    WHEN: Create an emulator from data with log transforms
+    THEN: Correctly sorts and interpolates data
+    """
+    EPS = 10 ** -1
+    N = 200
+    data, domain, spacing = dataset_2d_log_non_linear
+    error_threshold = 0
+    max_depth = 2
+    model_classes = [{'type': 'nd-linear', 'transforms': [None, 'log']}]
+    # Create emulator
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
+    # Compute new values over domain
+    X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.logspace(np.log10(domain[1][0])
+                                                                               , np.log10(domain[1][1]), N))
+    input = np.array([X.flatten(), Y.flatten()]).T
+    f_interp = emulator(input).reshape([N, N])
+    f_true = X * np.log10(Y)
+    error = abs(f_true - f_interp)
+    # resize and plot
+    plt.imshow(error, origin='lower')
+    plt.title("Should not see any grid structure")
+    plt.colorbar()
+    plt.show()
+
+    emulator.save('.', 'non_linear2d')
+    # check if error is low
+    assert np.all(error <= EPS)
 
 
 def test_cpp_emulator():
