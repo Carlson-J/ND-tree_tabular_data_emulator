@@ -1,4 +1,5 @@
 from nd_emulator import build_emulator, EmulatorCpp, load_emulator, make_cpp_emulator
+import nd_emulator
 import pytest
 import numpy as np
 import matplotlib.pyplot as plt
@@ -269,7 +270,7 @@ def test_2d_log_transforms(dataset_2d_log_non_linear):
 def test_cpp_emulator():
     save_directory = '.'
     emulator_name = 'non_linear2d'
-    cpp_source_dir = '../../cpp_emulator'
+    cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
     make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
     EPS = 10**-10
@@ -290,16 +291,16 @@ def test_cpp_emulator():
         inputs[i, :] = np.random.uniform(low[i], high[i], size=[N])
 
     # time the evaluation of both methods
-    # # Python
-    start_py = time()
-    out_py = emulator_py(inputs.T)
-    end_py = time()
-    dt_py = end_py - start_py
     # # CPP
     start_cpp = time()
     out_cpp = emulator_cpp(inputs)
     end_cpp = time()
     dt_cpp = end_cpp - start_cpp
+    # # Python
+    start_py = time()
+    out_py = emulator_py(inputs.T)
+    end_py = time()
+    dt_py = end_py - start_py
 
     # check if answer is the same
     diff = abs(out_cpp - out_py)
