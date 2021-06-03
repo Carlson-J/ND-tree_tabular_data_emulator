@@ -11,6 +11,7 @@ import subprocess
 import sys
 import shutil
 import os
+import h5py
 
 
 def build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, max_test_points=100,
@@ -189,16 +190,38 @@ class EmulatorCpp:
         :param filename: (string) Location of hdf5 file that holds the info needed to construct the emulator.
         :param extern_name: (string) name of the extern C function that goes along with the emulator
         """
+        # get index and encoding types
+        with h5py.File(filename, 'r') as file:
+            encoding_type = np.ctypeslib.as_ctypes_type(file['mapping']['encoding'].dtype)
+            indexing_type = np.ctypeslib.as_ctypes_type(file['mapping']['indexing'].dtype)
+        class emulator_struct(ctypes.Structure):
+            _fields_ = [
+                ('max_depth', ctypes.c_size_t),
+                ('weight_offset', ctypes.c_size_t),
+                ('model_classes', ctypes.POINTER(ctypes.c_size_t)),
+                ('model_class_weights', ctypes.POINTER(ctypes.c_size_t)),
+                ('spacing', ctypes.POINTER(ctypes.c_size_t)),
+                ('dx', ctypes.POINTER(ctypes.c_double)),
+                ('domain', ctypes.POINTER(ctypes.c_double)),
+                ('offsets', ctypes.POINTER(ctypes.c_size_t)),
+                ('model_array_offsets', ctypes.POINTER(ctypes.c_size_t)),
+                ('encoding_array', ctypes.POINTER(encoding_type)),
+                ('indexing_array', ctypes.POINTER(indexing_type)),
+                ('model_arrays', ctypes.POINTER(ctypes.c_double)),
+            ]
+
+
         # Load C++ emulator
         self.lib = ctypes.cdll.LoadLibrary(extern_lib_location)
-        self.setup_emulator = eval(f'self.lib.{extern_name}_emulator_setup')
-        self.interpolate = eval(f'self.lib.{extern_name}_emulator_interpolate')
-        self.free = eval(f'self.lib.{extern_name}_emulator_free')
+        self.setup_emulator = self.lib.non_linear2d_emulator_setup # eval(f'self.lib.{extern_name}_emulator_setup')
+        self.interpolate = self.lib.non_linear2d_emulator_interpolate # eval(f'self.lib.{extern_name}_emulator_interpolate')
+        self.free = self.lib.non_linear2d_emulator_free # eval(f'self.lib.{extern_name}_emulator_free')
 
         # set input and output type
         self.setup_emulator.argtypes = [ctypes.c_char_p]
-        self.interpolate.argtypes = [ctypes.c_void_p, ndpointer(dtype=np.uintp, ndim=1, flags='C'), ctypes.c_size_t,
+        self.interpolate.argtypes = [ctypes.POINTER(emulator_struct), ndpointer(dtype=np.uintp, ndim=1, flags='C'), ctypes.c_size_t,
                                 ctypes.POINTER(ctypes.c_double)]
+        self.setup_emulator.restype = ctypes.POINTER(emulator_struct)
 
         # load emulator
         self.emulator = self.setup_emulator(filename.encode("UTF-8"))
@@ -222,6 +245,7 @@ class EmulatorCpp:
         # construct 2d array for C++ function
         # transform inputs
         double_pointer_2d = (inputs.__array_interface__['data'][0] + np.arange(inputs.shape[0])*inputs.strides[0]).astype(np.uintp)
+        
         # do interpolation
         self.interpolate(self.emulator, double_pointer_2d, ctypes.c_size_t(num_points), output)
 
