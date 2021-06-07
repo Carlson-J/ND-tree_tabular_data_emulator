@@ -3,12 +3,12 @@ project(profiler)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -Wall -Wextra")
+add_compile_options(-DHIGHFIVE_USE_BOOST=OFF)
 
 add_subdirectory(HighFive)
 include_directories(emulator)
 
 add_executable(profiler profiler/main.cpp)
-add_compile_options(-DHIGHFIVE_USE_BOOST=OFF)
 target_link_libraries(profiler HighFive)
 
 add_subdirectory(Tests)

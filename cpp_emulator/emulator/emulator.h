@@ -49,28 +49,23 @@ public:
          * return_array: Any array of size num_points that will be modified.
          *
          * The interpolation is done using an emulator that has been computed offline and loaded when
-         * the object is instantiated. The type of interpolation can vary throught the table, which is
+         * the object is instantiated. The type of interpolation can vary throughout the table, which is
          * divided into cells. These cells are defined by a nd-tree decomposition. The mapping from the
          * input space to each cell is included in the offline emulator.
          */
         // Determine which model (i.e. interpolator) each point will use.
-        size_t mapping_array[num_points];
         for (size_t i = 0; i < num_points; i++){
-            double point[num_dim];
+            double point_domain[num_dim] = {0};
+            double point[num_dim] = {0};
             for (size_t j = 0; j < num_dim; j++){
+                point_domain[j] = points[j][i];
                 point[j] = points[j][i];
                 // Do any needed domain transforms
-                domain_transform(&point[j], j, 1);
+                domain_transform(&point_domain[j], j, 1);
             }
-            mapping_array[i] = get_model_index(point);
-        }
-        // Do interpolation
-        for (size_t i = 0; i < num_points; i++){
-            double point[num_dim];
-            for (size_t j = 0; j < num_dim; j++){
-                point[j] = points[j][i];
-            }
-            return_array[i] = interp_point(point, mapping_array[i]);
+            auto model_index = get_model_index(point_domain);
+            // Do interpolation
+            return_array[i] = interp_point(point, model_index);
         }
     }
 
