@@ -69,6 +69,25 @@ public:
         }
     }
 
+    encoding_int compute_tree_index(const double* point){
+        // Compute index of the cell that the point falls in in the tree index space
+        size_t cartesian_indices[num_dim];
+        for (size_t i = 0; i < num_dim; i++){
+            cartesian_indices[i] = size_t((point[i] - domain[i * 2 + 0]) / dx[i]);
+            // If the index is outside the domain of the emulator round to the nearest cell.
+            cartesian_indices[i] = std::max(size_t(0), cartesian_indices[i]);
+            cartesian_indices[i] = std::min(size_t(pow(2, max_depth) - 1), cartesian_indices[i]);
+        }
+        // convert to tree index space
+        size_t index = 0;
+        for (size_t i = 0; i < max_depth; i++){
+            for (size_t j = 0; j < num_dim; j++){
+                index = (index << 1) | ((cartesian_indices[num_dim - 1 - j] >> (max_depth - i - 1)) & 1);
+            }
+        }
+        return encoding_int(index);
+    }
+
 private:
     size_t max_depth;
     size_t weight_offset;
@@ -159,24 +178,7 @@ private:
         return indexing_array[index];
     }
 
-    encoding_int compute_tree_index(const double* point){
-        // Compute index of the cell that the point falls in in the tree index space
-        size_t cartesian_index[num_dim];
-        for (size_t i = 0; i < num_dim; i++){
-            cartesian_index[i] = size_t((point[i] - domain[i*2 + 0])/dx[i]);
-            // If the index is outside the domain of the emulator round to the nearest cell.
-            cartesian_index[i] = std::max(size_t(0), cartesian_index[i]);
-            cartesian_index[i] = std::min(size_t(pow(2, max_depth) - 1), cartesian_index[i]);
-        }
-        // convert to tree index space
-        size_t index = 0;
-        for (size_t i = 0; i < max_depth; i++){
-            for (size_t j = 0; j < num_dim; j++){
-                index = (index << 1) | ((cartesian_index[num_dim - 1 - j] >> (max_depth - i - 1)) & 1);
-            }
-        }
-        return encoding_int(index);
-    }
+
     double interp_point(const double* point, const size_t index){
         // Determine which model array to use
         auto start = std::begin(offsets);
