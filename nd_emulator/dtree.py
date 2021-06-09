@@ -27,18 +27,41 @@ class DTree:
         self.domain_spacings = compute_ranges(self.params.domain, self.params.spacing, self.params.dims)
         self.achieved_depth = 0
 
+        # check if each element is it is a power of 2 after removing 1
+        self.domain_rounding_type = None
+        for n in range(len(self.params.dims)):
+            a = data['f'].shape[n] - 1
+            # (https://stackoverflow.com/questions/57025836/how-to-check-if-a-given-number-is-a-power-of-two)
+            # check if data is of the size 2^a + 1. If it is not, set the flag accordingly.
+            if not ((a & (a - 1) == 0) and a != 0):
+                # Change mask so that it expands to the smallest hyper-rectangle that has data at
+                # all corners and contains the desired domain.
+                self.domain_rounding_type = 'expand'
+
         # create the root node
         self.root = {
             'domain': self.params.domain,
             'children': None,
             'id': [],
             'model': None,
-            'mask': create_mask(self.params.domain, self.params.domain, self.params.dims, self.params.spacing),
+            'mask': create_mask(self.params.domain, self.params.domain, self.params.dims, self.params.spacing,
+                                domain_rounding_type=self.domain_rounding_type),
             'error': None
         }
 
         # build tree
         self.refine_region(self.root)
+
+    def check_max_depth(self, node):
+        """
+        Return true for max depth reached if the current depth is the max depth or if
+        the number of points in the current hyper-rectangle (the cell's domain) is as
+        small as it can be, i.e., there is not enough data to make it smaller.
+        :param node:
+        :return:
+        """
+        assert(False), "Add in a check for min domain in data"
+        return self.params.max_depth > len(node['id'])
 
     def refine_region(self, node):
 
@@ -46,7 +69,8 @@ class DTree:
         fit, error = self.fit_region(node)
 
         # check error and depth
-        if error >= self.params.error_threshold and self.params.max_depth > len(node['id']):
+
+        if error >= self.params.error_threshold and self.check_max_depth(node):
             # create children nodes
             self.create_children_nodes(node)
             if len(node['children'][0]['id']) > self.achieved_depth:
@@ -106,7 +130,8 @@ class DTree:
                 'children': None,
                 'id': id_new,
                 'model': None,
-                'mask': create_mask(domain_new, self.params.domain, self.params.dims, self.params.spacing),
+                'mask': create_mask(domain_new, self.params.domain, self.params.dims, self.params.spacing,
+                                    domain_rounding_type=self.domain_rounding_type),
                 'error': None
             })
 

@@ -46,11 +46,6 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
     dims = data['f'].shape
     for key in data:
         assert (data[key].shape == dims)
-    # check if each element is it is a power of 2 after removing 1
-    for n in range(len(dims)):
-        a = data['f'].shape[n] - 1
-        # (https://stackoverflow.com/questions/57025836/how-to-check-if-a-given-number-is-a-power-of-two)
-        assert ((a & (a - 1) == 0) and a != 0)
 
     # construct a dictionary with all the needed parameters
     tree_parameters = Parameters(max_depth, np.array(spacing), np.array(dims), error_threshold, np.array(model_classes),
