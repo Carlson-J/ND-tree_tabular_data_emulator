@@ -137,6 +137,10 @@ def test_1d_interpolation():
     f_true = 3 * x_test
     f_true[x_test > 1] = np.sin(x_test[x_test > 1])
     error = abs(f_true.flatten() - f_interp)
+    # get node locations
+    cell_locations = emulator.get_cell_locations()
+    plt.figure()
+    plt.plot(cell_locations.flatten(), min(y)*np.ones_like(cell_locations.flatten()), '*', label='Cell Locations')
     # Plot errors
     plt.plot(x_test, error, '--', label='error')
     plt.plot(x_test, f_true, label='true')
@@ -308,3 +312,42 @@ def test_cpp_emulator():
     assert (np.max(diff) < EPS)
 
     print(f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py/dt_cpp}\ndiff: L1={np.mean(diff)}, LI={np.max(diff)}")
+
+#
+# def test_1d_interpolation():
+#     """
+#     GIVEN: 1d domain and function values
+#     WHEN: build tree
+#     THEN: refines correctly
+#     """
+#     # create function and domain
+#     domain = [[0, 2]]
+#     x = np.linspace(domain[0][0], domain[0][1], 2 ** 5 + 1)
+#     y = 3 * x
+#     y[x > 1] = np.sin(x[x > 1])
+#     data = {'f': y}
+#     spacing = ['linear']
+#
+#     # build tree
+#     EPS = 10 ** -13
+#     N = 200
+#     error_threshold = 1e-2
+#     max_depth = 5
+#     model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
+#     # Create emulator
+#     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
+#     # Compute new values over domain
+#     x_test = np.linspace(domain[0][0], domain[0][1], N).reshape([N, 1])
+#     f_interp = emulator(x_test)
+#     f_true = 3 * x_test
+#     f_true[x_test > 1] = np.sin(x_test[x_test > 1])
+#     error = abs(f_true.flatten() - f_interp)
+#     # Plot errors
+#     plt.plot(x_test, error, '--', label='error')
+#     plt.plot(x_test, f_true, label='true')
+#     plt.plot(x_test, f_interp, '--', label='interp')
+#     plt.plot(x, y, '.', label='data')
+#     plt.legend()
+#     plt.xlabel('x')
+#     plt.ylabel('y')
+#     plt.show()

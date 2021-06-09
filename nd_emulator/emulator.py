@@ -15,7 +15,7 @@ import h5py
 
 
 def build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, max_test_points=100,
-                 relative_error=False):
+                   relative_error=False):
     """
     Creates an emulator using ND-tree decomposition over the given domain. The refinement of the tree is carried out
     until a specified error threshold is reached.
@@ -94,6 +94,13 @@ class Emulator:
         self.model_arrays = compact_mapping.model_arrays
         self.params = compact_mapping.params
 
+        # precompute some things
+        ndims = len(self.params.dims)
+        self.domain = transform_domain(self.params.domain, self.params.spacing)
+        self.dx = np.zeros([ndims])
+        for i in range(ndims):
+            self.dx[i] = (self.domain[i][1] - self.domain[i][0]) / 2 ** self.params.max_depth
+
     def __call__(self, inputs):
         """
         Compute the  interpolated values at each point in the input array.
@@ -102,16 +109,12 @@ class Emulator:
         """
         inputs = np.atleast_2d(inputs)
         ndims = len(self.params.dims)
-        assert(inputs.shape[1] == ndims)
-        # precompute some things
-        domain = transform_domain(self.params.domain, self.params.spacing)
-        dx = np.zeros([ndims])
-        for i in range(ndims):
-            dx[i] = (domain[i][1] - domain[i][0]) / 2**self.params.max_depth
+        assert (inputs.shape[1] == ndims)
+
         sol = np.zeros([inputs.shape[0]])
         for i, point in enumerate(inputs):
             # find out which model
-            weights, index = self.find_model(point, dx)
+            weights, index = self.find_model(point)
             # compute fit
             if self.params.model_classes[index]['type'] == 'nd-linear':
                 sol[i] = nd_linear_model(weights, point)[0]
@@ -119,31 +122,38 @@ class Emulator:
                 raise ValueError
         return sol
 
-    def find_model(self, point, dx):
+    def find_model_index(self, point):
+        """
+        Find the model index for a point
+        :param point: (array) [x0, x1,...]
+        :return:
+        """
+        tree_index = self.compute_tree_index(point)
+        # find index in encoding array
+        index = np.searchsorted(self.encoding_array, tree_index, side='right')
+        return self.index_array[index]
+
+    def find_model(self, point):
         """
         Find the model weights and the index of model class array it is
         :param point: (array) [x0, x1,...]
-        :param dx: (array) points spacing of cartesian index grid in each dim
         :return: (dict) model
         """
-        tree_index = self.compute_tree_index(point, dx)
-        # find index in encoding array
-        index = np.searchsorted(self.encoding_array, tree_index, side='right')
-        model_index = self.index_array[index]
+        model_index = self.find_model_index(point)
         # Determine which type of model it is by index
         if len(self.offsets) > 1:
-            model_list_index = next((x for x, val in enumerate(self.offsets[1:]) if val > model_index), len(self.offsets) - 1)
+            model_list_index = next((x for x, val in enumerate(self.offsets[1:]) if val > model_index),
+                                    len(self.offsets) - 1)
         else:
             model_list_index = 0
         model_weights = self.model_arrays[model_list_index][model_index - self.offsets[model_list_index]]
         return model_weights, model_list_index
 
-    def compute_tree_index(self, point, dx):
+    def compute_tree_index(self, point):
         """
         Compute the tree index-space index for a given point.
         The point should be within the domain of the root node.
         :param point: (array) the location of the point
-        :param dx: (array) The spacing in each direction.
         :return: (int)
         """
         # do any needed transforms for spacing reasons.
@@ -152,9 +162,9 @@ class Emulator:
         # compute cartesian coordinate on regular grid of points
         coords_cart = np.zeros(len(self.params.dims), dtype=int)
         for i in range(len(point_new)):
-            coords_cart[i] = int(np.floor((point_new[i] - domain[i][0]) / dx[i]))
+            coords_cart[i] = int(np.floor((point_new[i] - domain[i][0]) / self.dx[i]))
             # if the right most point would index into a cell that is not their move it back a cell.
-            if coords_cart[i] == 2**self.params.max_depth:
+            if coords_cart[i] == 2 ** self.params.max_depth:
                 coords_cart[i] -= 1
         # convert to tree index
         index = 0
@@ -179,6 +189,37 @@ class Emulator:
         """
         save_compact_mapping(self.get_compact_mapping(), folder_path, emulator_name)
 
+    def get_cell_locations(self):
+        """
+        Compute the locations of all the boundaries of the cells.
+        :return:
+        """
+        # ** This is a dumb brute force way of doing it **
+        # get list of all possible node points
+        shape = self.params.dims
+        n_dims = len(shape)
+        ranges = [np.linspace(*self.params.domain[i], 2 ** (n_dims * self.params.max_depth)) for i in range(len(shape))]
+        X = np.meshgrid(*ranges, indexing='ij')
+        Y = np.array([x.flatten() for x in X])
+
+        # node points are ones where moving across the point on any axis changed the domain you ar in
+        node_points = [Y[:, 0]]
+        for i in range(1, len(Y[0, :]) - 1):
+            is_node = False
+            for j in range(n_dims):
+                p1 = Y[:, i].copy()
+                p1[j] += self.dx[j] / 2.
+                p2 = Y[:, i].copy()
+                p2[j] -= self.dx[j] / 2.
+                if self.find_model_index(p1) != self.find_model_index(p2):
+                    is_node = True
+                    break
+            if is_node:
+                node_points.append(Y[:, i])
+        node_points.append(Y[:, -1])
+
+        return np.array(node_points)
+
 
 class EmulatorCpp:
     def __init__(self, filename, extern_name, extern_lib_location):
@@ -194,6 +235,7 @@ class EmulatorCpp:
         with h5py.File(filename, 'r') as file:
             encoding_type = np.ctypeslib.as_ctypes_type(file['mapping']['encoding'].dtype)
             indexing_type = np.ctypeslib.as_ctypes_type(file['mapping']['indexing'].dtype)
+
         class emulator_struct(ctypes.Structure):
             _fields_ = [
                 ('max_depth', ctypes.c_size_t),
@@ -210,17 +252,17 @@ class EmulatorCpp:
                 ('model_arrays', ctypes.POINTER(ctypes.c_double)),
             ]
 
-
         # Load C++ emulator
         self.lib = ctypes.cdll.LoadLibrary(extern_lib_location)
-        self.setup_emulator = self.lib.non_linear2d_emulator_setup # eval(f'self.lib.{extern_name}_emulator_setup')
-        self.interpolate = self.lib.non_linear2d_emulator_interpolate # eval(f'self.lib.{extern_name}_emulator_interpolate')
-        self.free = self.lib.non_linear2d_emulator_free # eval(f'self.lib.{extern_name}_emulator_free')
+        self.setup_emulator = self.lib.non_linear2d_emulator_setup  # eval(f'self.lib.{extern_name}_emulator_setup')
+        self.interpolate = self.lib.non_linear2d_emulator_interpolate  # eval(f'self.lib.{extern_name}_emulator_interpolate')
+        self.free = self.lib.non_linear2d_emulator_free  # eval(f'self.lib.{extern_name}_emulator_free')
 
         # set input and output type
         self.setup_emulator.argtypes = [ctypes.c_char_p]
-        self.interpolate.argtypes = [ctypes.POINTER(emulator_struct), ndpointer(dtype=np.uintp, ndim=1, flags='C'), ctypes.c_size_t,
-                                ctypes.POINTER(ctypes.c_double)]
+        self.interpolate.argtypes = [ctypes.POINTER(emulator_struct), ndpointer(dtype=np.uintp, ndim=1, flags='C'),
+                                     ctypes.c_size_t,
+                                     ctypes.POINTER(ctypes.c_double)]
         self.setup_emulator.restype = ctypes.POINTER(emulator_struct)
 
         # load emulator
@@ -244,8 +286,10 @@ class EmulatorCpp:
         output = (ctypes.c_double * num_points)()
         # construct 2d array for C++ function
         # transform inputs
-        double_pointer_2d = (inputs.__array_interface__['data'][0] + np.arange(inputs.shape[0])*inputs.strides[0]).astype(np.uintp)
-        
+        double_pointer_2d = (
+                    inputs.__array_interface__['data'][0] + np.arange(inputs.shape[0]) * inputs.strides[0]).astype(
+            np.uintp)
+
         # do interpolation
         self.interpolate(self.emulator, double_pointer_2d, ctypes.c_size_t(num_points), output)
 
@@ -260,7 +304,7 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
     :param cpp_source_dir: (str) the location of the cpp_emulator directory
     :return:
     """
-    assert(os.path.isfile(save_directory + '/' + emulator_name + "_cpp_params.h"))
+    assert (os.path.isfile(save_directory + '/' + emulator_name + "_cpp_params.h"))
     # create C++ shared library to accompany it
     # -- Create tmp build directory (the old one will be removed)
     tmp_dir = "./tmp"
@@ -273,7 +317,7 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
     else:
         shell = False
     # -- Put include file that is needed to compile the library for the specific table
-    shutil.copy(save_directory + '/' + emulator_name + "_cpp_params.h", cpp_source_dir +'/emulator/table_params.h')
+    shutil.copy(save_directory + '/' + emulator_name + "_cpp_params.h", cpp_source_dir + '/emulator/table_params.h')
     # -- Create build files
     cmakeCmd = ["cmake", '-S', cpp_source_dir, '-B', tmp_dir, '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
     subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell)
