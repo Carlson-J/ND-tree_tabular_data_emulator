@@ -161,11 +161,11 @@ def test_2d_log_transforms(dataset_2d_log_non_linear):
     WHEN: Create an emulator from data with log transforms
     THEN: Correctly sorts and interpolates data
     """
-    EPS = 10 ** -1
+    EPS = 10 ** -2
     N = 200
     data, domain, spacing = dataset_2d_log_non_linear
-    error_threshold = 0
-    max_depth = 2
+    error_threshold = 0.01
+    max_depth = 6
     model_classes = [{'type': 'nd-linear', 'transforms': [None, 'log']}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
@@ -178,7 +178,7 @@ def test_2d_log_transforms(dataset_2d_log_non_linear):
     error = abs(f_true - f_interp)
     # resize and plot
     plt.imshow(error, origin='lower')
-    plt.title("Should not see any grid structure")
+    plt.title("Should see that the right half is more refined than the left")
     plt.colorbar()
     plt.show()
 
