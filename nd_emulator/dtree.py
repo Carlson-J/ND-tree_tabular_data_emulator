@@ -27,16 +27,22 @@ class DTree:
         self.domain_spacings = compute_ranges(self.params.domain, self.params.spacing, self.params.dims)
         self.achieved_depth = 0
 
-        # check if each element is it is a power of 2 after removing 1
+        # determine the index domain. If we are not expanding it to fit, determine the domain rounding scheme
         self.domain_rounding_type = None
-        for n in range(len(self.params.dims)):
-            a = data['f'].shape[n] - 1
-            # (https://stackoverflow.com/questions/57025836/how-to-check-if-a-given-number-is-a-power-of-two)
-            # check if data is of the size 2^a + 1. If it is not, set the flag accordingly.
-            if not ((a & (a - 1) == 0) and a != 0):
-                # Change mask so that it expands to the smallest hyper-rectangle that has data at
-                # all corners and contains the desired domain.
-                self.domain_rounding_type = 'expand'
+        if self.params.expand_index_domain:
+            self.index_domain, self.index_dims = self.compute_index_domain()
+        else:
+            self.index_domain = self.params.domain
+            self.index_dims = self.params.dims
+            # check if each element is it is a power of 2 after removing 1
+            for n in range(len(self.params.dims)):
+                a = data['f'].shape[n] - 1
+                # (https://stackoverflow.com/questions/57025836/how-to-check-if-a-given-number-is-a-power-of-two)
+                # check if data is of the size 2^a + 1. If it is not, set the flag accordingly.
+                if not ((a & (a - 1) == 0) and a != 0):
+                    # Change mask so that it expands to the smallest hyper-rectangle that has data at
+                    # all corners and contains the desired domain.
+                    self.domain_rounding_type = 'expand'
 
         # check max depth
         self.max_depth = self.get_max_depth()
@@ -54,6 +60,12 @@ class DTree:
 
         # build tree
         self.refine_region(self.root)
+
+    def compute_index_domain(self):
+        """
+        ---
+        :return:
+        """
 
     def get_max_depth(self):
         """

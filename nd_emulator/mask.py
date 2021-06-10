@@ -17,32 +17,40 @@ def get_mask_dims(mask):
 def create_mask(sub_domain, domain, dims, spacings, domain_rounding_type=None):
     """
             A mask for nd data. It is assumed that the data is evenly spaced after the transform has been done.
+            For sub_domains that are entirely outside the domain, None is returned for the mask.
+            For sub_domains that are partially outside the domain, the intersection of the two are returned.
             :param sub_domain: (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
-                dimension for the new domain. Should be contained inside full domain
+                dimension for the new domain.
             :param domain: (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
                 dimension for the full domain.
             :param dims: (list) the number of elements along each axis of the data matrix
             :param spacings: (list) how the points are spaced in each dimension.
             :param domain_rounding_type: [None, 'expand', 'contract'] How to handle subdomains that do not line up with
                 points. expand will round the index to the extreme and contract will do the opposite.
+            :return (tuple) of intervals or None if the intersection between domains is the empty set
             """
     EPS = 10 ** -10
-    # Make sure the sub-domain is within the original domain
+    # Make sure the dimensions are correct
     assert (len(domain) == len(sub_domain) and len(domain) == len(spacings) and len(domain) == len(dims))
     num_dims = len(spacings)
+    # get domain intersection
+    d_sub = sub_domain.copy()
     for i in range(num_dims):
-        assert (domain[i][0] <= sub_domain[i][0] and domain[i][1] >= sub_domain[i][1])
-
+        # only keep intersection range
+        d_sub[i][0] = np.max([sub_domain[i][0], domain[i][0]])
+        d_sub[i][1] = np.min([sub_domain[i][1], domain[i][1]])
+        # return None if there is no intersection
+        if d_sub[i][0] >= d_sub[i][1]:
+            return None
     # do needed spacings
     d = domain.copy()
-    d_sub = sub_domain.copy()
     for i in range(num_dims):
         if spacings[i] == 'linear':
             continue
         elif spacings[i] == 'log':
             assert (np.all(np.array(domain[i]) > 0))
             d[i] = np.log10(domain[i])
-            d_sub[i] = np.log10(sub_domain[i])
+            d_sub[i] = np.log10(d_sub[i])
 
     # compute index ranges
     index_ranges = np.zeros([num_dims, 2], dtype=int)
