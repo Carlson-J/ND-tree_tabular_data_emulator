@@ -1,14 +1,10 @@
 import os
 from data_loading_functions.load_test_data import load_test_data
 from nd_emulator import build_emulator, make_cpp_emulator
-import subprocess
-import sys
-import shutil
+from data_loading_functions.load_Hempel_SFHoEOS import load_SFHo_EOS
+import numpy as np
 """
-This script is used to create a compact emulator using a tree based decomposition of the domain and
-multiple model classes to fit the function in each resulting cell.
-
-Save directory: 
+Build the emulator for the SFHo EOS
 """
 
 if __name__ == "__main__":
@@ -16,26 +12,19 @@ if __name__ == "__main__":
     # If the emulator has already been made, but you want to regenerate the C++ library set to True
     skip_emulator_creation = False
     # Directory where the emulator should be saved. Will be created if it does note exist.
-    save_directory = "./test"
-    cpp_source_dir = './cpp_emulator'
+    save_directory = "."
+    cpp_source_dir = '../cpp_emulator'
     # Name of emulator. This will be used to construct the name used when calling the compiled version and
     # -- and determining the filenames of the various saved files.
     # -- It should not contain spaces, nasty special characters or a file extension
-    emulator_name = "testing"
+    emulator_name = "FSHo_v1"
 
     if not skip_emulator_creation:
-        # Specify domain and number of points in each dimension
-        # -- Note that the number of points should equal 2^a-1 for some integer a for best performance
-        # -- the spacing should be how the points are spaced. They must be evenly spaced, but
-        # -- that spacing can be in linear or log space.
-        domain = [[0, 1], [2, 3]]
-        dims = [2**3+1, 2**4+1]
-        spacing = ['linear', 'linear']
-
-        # Load function data
-        # -- You should create your own function to load your data and put it in the data_loading_functions folder
-        # -- where you can call it from.
-        data = load_test_data(dims, domain)
+        # Load table
+        EOS_file = "../../tables/Hempel_SFHoEOS_rho222_temp180_ye60_version_1.1_20120817.h5"
+        vars, domain = load_SFHo_EOS(EOS_file)
+        domain = np.log10(np.array(domain))
+        spacing = ['linear', 'linear']      # We will do the transform ahead of time.
 
         # Specify model types
         # -- add each model type to the list in the format of a dict {'type': name, ...}

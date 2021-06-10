@@ -10,7 +10,7 @@ int main() {
     auto emulator = Emulator<ND_TREE_EMULATOR_TYPE>(table_location);
     // create test data
     // -- scan at a fixed x1
-    const size_t num_points = 4000;
+    const size_t num_points = 1000;
     const size_t NUM_RUNS = 10;
     for (size_t j = 0; j < NUM_RUNS; j++){
         double x0[num_points];
