@@ -193,7 +193,7 @@ class Emulator:
         # get list of all possible node points
         shape = self.params.dims
         n_dims = len(shape)
-        ranges = [np.linspace(*self.params.domain[i], 2 ** (n_dims * self.params.max_depth) + 1) for i in range(len(shape))]
+        ranges = [np.linspace(*self.params.domain[i], 2 ** (self.params.max_depth) + 1) for i in range(len(shape))]
         X = np.meshgrid(*ranges, indexing='ij')
         Y = np.array([x.flatten() for x in X])
 

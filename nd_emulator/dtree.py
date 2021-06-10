@@ -38,6 +38,9 @@ class DTree:
                 # all corners and contains the desired domain.
                 self.domain_rounding_type = 'expand'
 
+        # check max depth
+        self.max_depth = self.get_max_depth()
+
         # create the root node
         self.root = {
             'domain': self.params.domain,
@@ -52,25 +55,48 @@ class DTree:
         # build tree
         self.refine_region(self.root)
 
-    def check_max_depth(self, node):
+    def get_max_depth(self):
         """
-        Return true for max depth reached if the current depth is the max depth or if
-        the number of points in the current hyper-rectangle (the cell's domain) is as
-        small as it can be, i.e., there is not enough data to make it smaller.
-        :param node:
-        :return:
+        Check to see if the max depth is set too small. For data that is of the form 2^a + 1
+        the max depth is a. For data that does not meet the criteria we limit it to
+        be = ceil(log2(min(dims) - 1)).
+        A warning is printed if the depth asked for is lower than this.
+        :return: (int) max depth
         """
-        assert(False), "Add in a check for min domain in data"
-        return self.params.max_depth > len(node['id'])
+        # check if data has optimal dims
+        if self.domain_rounding_type is not None:
+            print("""
+WARNING!
+You have used data that has one or more dimension with number of the element not equal to (2^a) + 1
+where a is some integer. This will still work but will be less effective as the data used to fit each 
+cell will be expanded to the smallest hyper-rectangle that contains the domain and has a data point 
+at each corner. This can also result in more discontinuous solutions at cell boundaries.
+""")
+
+        max_depth = np.infty
+        for num_vars in self.params.dims:
+            tmp = int(np.ceil(np.log2(num_vars - 1)))
+            if max_depth > tmp:
+                max_depth = tmp
+
+        if max_depth < self.params.max_depth:
+            print(f"""WARNING!
+You have chosen a max depth that is greater than can be supported by your data.
+The max depth has been changed to {max_depth}.
+""")
+
+            return max_depth
+        else:
+            return self.params.max_depth
 
     def refine_region(self, node):
 
         # train region
         fit, error = self.fit_region(node)
-
+        node['error'] = error
         # check error and depth
 
-        if error >= self.params.error_threshold and self.check_max_depth(node):
+        if error >= self.params.error_threshold and self.max_depth > len(node['id']):
             # create children nodes
             self.create_children_nodes(node)
             if len(node['children'][0]['id']) > self.achieved_depth:
@@ -80,7 +106,6 @@ class DTree:
                 self.refine_region(node['children'][i])
         else:
             node['model'] = fit
-            node['error'] = error
         return
 
     def create_children_nodes(self, node):
@@ -146,11 +171,11 @@ class DTree:
         assert (len(self.params.model_classes) > 0)
         # create test set
         dims = get_mask_dims(node['mask'])
-        random_indices = np.random.choice(np.prod(dims, dtype=int), min([np.prod(dims), self.params.max_test_points]))
+        random_indices = np.random.permutation(np.prod(dims, dtype=int))[:min([np.prod(dims), self.params.max_test_points])]
         test_indices = np.indices(dims).reshape([len(dims), np.prod(dims, dtype=int)]).T[random_indices]
         test_points = np.zeros([len(random_indices), len(dims)])
         for i in range(len(dims)):
-            test_points[:, i] = self.domain_spacings[i][test_indices[:, i]]
+            test_points[:, i] = self.domain_spacings[i][node['mask'][i]][test_indices[:, i]]
 
         # try each model class to which gives the lowest predicted error
         for model_class in self.params.model_classes:
@@ -164,7 +189,7 @@ class DTree:
                 fit = {'type': model_class, 'weights': weights, 'transforms': [None] * len(self.params.dims)}
                 # compute error
                 f_interp = nd_linear_model(weights, test_points)
-                f_true = np.array([self.data['f'][tuple(a)] for a in test_indices])
+                f_true = np.array([self.data['f'][node['mask']][tuple(a)] for a in test_indices])
                 err = self.compute_error(f_true, f_interp)
             else:
                 raise ValueError("Unknown model type: {model_class}")
