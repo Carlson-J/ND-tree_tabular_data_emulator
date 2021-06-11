@@ -84,7 +84,7 @@ def test_basic_4d(dataset_4d):
     # test outputs
     for i, point in enumerate(inputs):
         sol = sum(point) + 1
-        assert(abs(output[i] - sol) <= EPS)
+        assert (abs(output[i] - sol) <= EPS)
     # save it
     emulator.save(SAVE_LOC, SAVE_NAME)
 
@@ -141,7 +141,7 @@ def test_1d_interpolation():
     # get node locations
     cell_locations = emulator.get_cell_locations()
     plt.figure()
-    plt.plot(cell_locations.flatten(), min(y)*np.ones_like(cell_locations.flatten()), '*', label='Cell Locations')
+    plt.plot(cell_locations.flatten(), min(y) * np.ones_like(cell_locations.flatten()), '*', label='Cell Locations')
     # Plot errors
     plt.plot(x_test, error, '--', label='error')
     plt.plot(x_test, f_true, label='true')
@@ -153,19 +153,20 @@ def test_1d_interpolation():
     plt.show()
 
 
-
 @pytest.mark.dependency()
 def test_2d_log_transforms(dataset_2d_log_non_linear):
     """
     GIVEN: 2d function evaluations and a domain.
     WHEN: Create an emulator from data with log transforms
     THEN: Correctly sorts and interpolates data
+
+    Note: This data saved here is used by the cpp test. It must be copied to the correct dir to be updated.
     """
-    EPS = 10 ** -2
+    EPS = 10 ** -1
     N = 200
     data, domain, spacing = dataset_2d_log_non_linear
     error_threshold = 0.01
-    max_depth = 6
+    max_depth = 2
     model_classes = [{'type': 'nd-linear', 'transforms': [None, 'log']}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
@@ -178,7 +179,7 @@ def test_2d_log_transforms(dataset_2d_log_non_linear):
     error = abs(f_true - f_interp)
     # resize and plot
     plt.imshow(error, origin='lower')
-    plt.title("Should see that the right half is more refined than the left")
+    plt.title("No grid structure should be seen")
     plt.colorbar()
     plt.show()
 
@@ -194,7 +195,7 @@ def test_cpp_emulator():
     cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
     make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
-    EPS = 10**-10
+    EPS = 10 ** -10
     # load CPP emulator
     emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
                                save_directory + '/' + emulator_name + "_lib.so")
@@ -228,8 +229,8 @@ def test_cpp_emulator():
 
     assert (np.max(diff) < EPS)
 
-    print(f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py/dt_cpp}\ndiff: L1={np.mean(diff)}, LI={np.max(diff)}")
-
+    print(
+        f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py / dt_cpp}\ndiff: L1={np.mean(diff)}, LI={np.max(diff)}")
 
 
 def test_depth_control(dataset_2d):
@@ -243,7 +244,7 @@ def test_depth_control(dataset_2d):
     error_threshold = -1
     data, domain, spacing = dataset_2d
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
-    assert(emulator.params.max_depth == 3)
+    assert (emulator.params.max_depth == 3)
 
 
 def test_non_aligned_data():
@@ -291,7 +292,6 @@ def test_non_aligned_data():
     plt.show()
 
 
-
 def test_miss_aligned_2d():
     """
     Given: 2d domain and function that are not aligned with tree
@@ -300,7 +300,7 @@ def test_miss_aligned_2d():
     """
     # create function and domain
     domain = [[0, 2], [0, 2]]
-    shape = [2 ** 3 + 10, 2**3 + 10]
+    shape = [2 ** 3 + 10, 2 ** 3 + 10]
     x = np.linspace(domain[0][0], domain[0][1], shape[0])
     X, Y = np.meshgrid(x, x)
     Z = 1.0 / (X + Y + 1e-3)
@@ -322,18 +322,102 @@ def test_miss_aligned_2d():
     f_interp = emulator(points)
     f_true = 1.0 / (X_test + Y_test + 1e-3)
     error = abs(f_true.flatten() - f_interp)
+    emulator.save('.', 'miss_aligned_2d')
     # get node locations
     cell_locations = emulator.get_cell_locations()
     plt.figure()
+    plt.imshow(f_true, extent=[0, 2, 0, 2], origin='lower')
     plt.scatter(X.flatten(), Y.flatten())
     plt.scatter(cell_locations[:, 0], cell_locations[:, 1], label='Cell Locations')
-    plt.imshow(f_true, extent=[0, 2, 0, 2], origin='lower')
     plt.legend()
     plt.ylabel('y')
     plt.xlabel('x')
     # Plot errors
     plt.figure()
     plt.imshow(error.reshape([N, N]), extent=[0, 2, 0, 2], origin='lower')
+    plt.colorbar()
+    plt.legend()
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.show()
+
+
+def test_miss_aligned_3d():
+    """
+    GIVEN: 3d data that is not the correct size
+    WHEN: Tree is build
+    THEN: Correct number of leaves are made
+    :return:
+    """
+    # Create dataset
+    domain = [[0, 1], [0, 1], [0, 1]]
+    dims = [3, 11, 12]
+    x = np.linspace(domain[0][0], domain[0][1], dims[0])
+    F = np.zeros(dims)
+    F[0, 0, 0] = 100
+    data = {'f': F}
+    max_depth = 4
+    spacing = ['linear', 'linear', 'linear']
+
+    # build emulator
+    error_threshold = 1e-10
+    model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
+    # Create emulator
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes,
+                              expand_index_domain=True)
+
+    # check for correct number of cells
+    correct_num_cells = 17
+    num_cells = len(emulator.index_array)
+    assert (num_cells == correct_num_cells)
+
+
+def test_miss_aligned_2d_extended():
+    """
+    Given: 2d domain and function that are not aligned with tree and uneven domain
+    When: tree is built
+    Then: correctly expands index domain
+    """
+    # create function and domain
+    domain = [[0, 1], [0, 2]]
+    shape = [2 ** 2 + 3, 2 ** 3 + 10]
+    x = np.linspace(domain[0][0], domain[0][1], shape[0])
+    y = np.linspace(domain[1][0], domain[1][1], shape[1])
+    X, Y = np.meshgrid(x, y, indexing='ij')
+    Z = 1.0 / (X + Y + 1e-3)
+    data = {'f': Z}
+    spacing = ['linear', 'linear']
+
+    # build tree
+    EPS = 10 ** -13
+    N = 500
+    error_threshold = 1e-0
+    max_depth = 6
+    model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
+    # Create emulator
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes,
+                              expand_index_domain=True)
+    # Compute new values over domain
+    x_test = np.linspace(domain[0][0], domain[0][1], N).reshape([N, 1])
+    y_test = np.linspace(domain[1][0], domain[1][1], N).reshape([N, 1])
+    X_test, Y_test = np.meshgrid(x_test, y_test)
+    points = np.array([X_test.flatten(), Y_test.flatten()]).T
+    f_interp = emulator(points)
+    f_true = 1.0 / (X_test + Y_test + 1e-3)
+    error = abs(f_true.flatten() - f_interp)
+    emulator.save('.', 'miss_aligned_2d_extended')
+    # get node locations
+    cell_locations = emulator.get_cell_locations()
+    plt.figure()
+    plt.scatter(X.flatten(), Y.flatten())
+    plt.scatter(cell_locations[:, 0], cell_locations[:, 1], label='Cell Locations')
+    plt.imshow(f_true, extent=np.array(domain).flatten(), origin='lower')
+    plt.legend()
+    plt.ylabel('y')
+    plt.xlabel('x')
+    # Plot errors
+    plt.figure()
+    plt.imshow(error.reshape([N, N]), extent=np.array(domain).flatten(), origin='lower')
     plt.colorbar()
     plt.legend()
     plt.xlabel('x')

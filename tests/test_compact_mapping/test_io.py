@@ -12,7 +12,7 @@ def test_loading_and_saving():
     # Create param and mapping objects
     params = Parameters(2, np.array(['linear', 'log']), np.array([20, 3]), 0.1,
                         np.array([{'type': 'nd-linear', 'transforms': None}, {'type': 'nd-linear', 'transforms': None}]),
-                        10, False, np.array([[0, 1], [5, 2]]))
+                        10, False, np.array([[0, 1], [5, 2]]), np.array([[0, 1], [5, 2]]), False)
     compact_mapping = CompactMapping(np.array([1, 4, 6]), np.array([2, 5, 7]), np.array([0, 1]),
                                      [np.array([[1.3, 1.5]]), np.array([[1.1, 1, 9]])], params)
 

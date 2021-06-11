@@ -11,3 +11,5 @@ class Parameters(NamedTuple):
     max_test_points: int
     relative_error: bool
     domain: np.ndarray
+    index_domain: np.ndarray
+    expand_index_domain: bool

@@ -23,10 +23,11 @@ public:
         // do domain tranform
         for (size_t i = 0; i < num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
+            domain_transform(&index_domain[i*2], i, 2);
         }
         // compute dx
         for (size_t i = 0; i < num_dim; i++){
-            dx[i] = (domain[i*2 + 1] - domain[i*2 + 0]) / (pow(2, max_depth));
+            dx[i] = (index_domain[i*2 + 1] - index_domain[i*2 + 0]) / (pow(2, max_depth));
         }
         // compute other derived quantities
         weight_offset = std::pow(2, num_dim);
@@ -73,8 +74,11 @@ public:
         // Compute index of the cell that the point falls in in the tree index space
         size_t cartesian_indices[num_dim];
         for (size_t i = 0; i < num_dim; i++){
-            cartesian_indices[i] = size_t((point[i] - domain[i * 2 + 0]) / dx[i]);
-            // If the index is outside the domain of the emulator round to the nearest cell.
+            // restrict the point to fall within the real domain (as opposed to the index domain)
+            double p = std::max(std::min(point[i], domain[i * 2 + 1]), domain[i * 2 + 0]);
+            // compute cartesian index
+            cartesian_indices[i] = size_t((p - domain[i * 2 + 0]) / dx[i]);
+            // If the index is outside the index domain of the emulator round to the nearest cell.
             cartesian_indices[i] = std::max(size_t(0), cartesian_indices[i]);
             cartesian_indices[i] = std::min(size_t(pow(2, max_depth) - 1), cartesian_indices[i]);
         }
@@ -96,6 +100,7 @@ private:
     size_t spacing[num_dim];
     double dx[num_dim];
     double domain[num_dim * 2];
+    double index_domain[num_dim * 2];
     size_t offsets[num_model_classes];
     size_t model_array_offsets[num_model_classes];
     encoding_int encoding_array[num_models];
@@ -121,6 +126,10 @@ private:
         // -- domain
         HighFive::Attribute attribute = file.getAttribute("domain");
         attribute.template read(domain);
+        assert(num_dim*2 == attribute.getSpace().getElementCount());
+        // -- index domain
+        attribute = file.getAttribute("index_domain");
+        attribute.template read(index_domain);
         assert(num_dim*2 == attribute.getSpace().getElementCount());
         // -- max depth
         attribute = file.getAttribute("max_depth");
@@ -152,7 +161,7 @@ private:
         // Load model arrays
         HighFive::Group model_group = file.getGroup("models");
         auto model_types = model_group.listObjectNames();
-        auto current_offset = 0;
+        size_t current_offset = 0;
         for (size_t i = 0; i < num_model_classes; i++) {
             model_array_offsets[i] = current_offset;
             dataset = model_group.getDataSet(model_types[i]);

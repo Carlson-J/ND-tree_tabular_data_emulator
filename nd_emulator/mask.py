@@ -7,6 +7,8 @@ def get_mask_dims(mask):
     :param mask:
     :return: dims
     """
+    if mask is None:
+        return None
     num_dims = len(mask)
     dims = np.zeros([num_dims], dtype=int)
     for j in range(num_dims):

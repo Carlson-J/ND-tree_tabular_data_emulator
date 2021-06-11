@@ -51,8 +51,9 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
         assert (data[key].shape == dims)
 
     # construct a dictionary with all the needed parameters
-    tree_parameters = Parameters(max_depth, np.array(spacing), np.array(dims), error_threshold, np.array(model_classes),
-                                 max_test_points, relative_error, np.array(domain), expand_index_domain)
+    tree_parameters = Parameters(max_depth, np.array(spacing), np.array(dims, dtype=int), error_threshold, np.array(model_classes),
+                                 max_test_points, relative_error, np.array(domain, dtype=float), np.array([None]),
+                                 expand_index_domain)
 
     # build tree
     tree = DTree(tree_parameters, data)
@@ -93,11 +94,12 @@ class Emulator:
         self.params = compact_mapping.params
 
         # precompute some things
-        ndims = len(self.params.dims)
+        self.num_dims = len(self.params.dims)
         self.domain = transform_domain(self.params.domain, self.params.spacing)
-        self.dx = np.zeros([ndims])
-        for i in range(ndims):
-            self.dx[i] = (self.domain[i][1] - self.domain[i][0]) / 2 ** self.params.max_depth
+        self.index_domain = transform_domain(self.params.index_domain, self.params.spacing)
+        self.dx = np.zeros([self.num_dims])
+        for i in range(self.num_dims):
+            self.dx[i] = (self.index_domain[i][1] - self.index_domain[i][0]) / 2 ** self.params.max_depth
 
     def __call__(self, inputs):
         """
@@ -106,8 +108,7 @@ class Emulator:
         :return: (array) the function value at each point.
         """
         inputs = np.atleast_2d(inputs)
-        ndims = len(self.params.dims)
-        assert (inputs.shape[1] == ndims)
+        assert (inputs.shape[1] == self.num_dims)
 
         sol = np.zeros([inputs.shape[0]])
         for i, point in enumerate(inputs):
@@ -156,18 +157,20 @@ class Emulator:
         """
         # do any needed transforms for spacing reasons.
         point_new = transform_point(point, self.params.spacing, reverse=False)
-        domain = transform_domain(self.params.domain, self.params.spacing)
-        # compute cartesian coordinate on regular grid of points
-        coords_cart = np.zeros(len(self.params.dims), dtype=int)
+        # restrict inputs to map to cells in the domain
+        for i in range(self.num_dims):
+            point_new[i] = np.max([np.min([point_new[i], self.domain[i][1]]), self.domain[i][0]])
+        # compute cartesian coordinate on regular grid of points in the index domain
+        coords_cart = np.zeros(self.num_dims, dtype=int)
         for i in range(len(point_new)):
-            coords_cart[i] = int(np.floor((point_new[i] - domain[i][0]) / self.dx[i]))
+            coords_cart[i] = int(np.floor((point_new[i] - self.index_domain[i][0]) / self.dx[i]))
             # if the right most point would index into a cell that is not their move it back a cell.
             if coords_cart[i] == 2 ** self.params.max_depth:
                 coords_cart[i] -= 1
         # convert to tree index
         index = 0
         for i in range(self.params.max_depth):
-            for j in range(len(point)):
+            for j in range(self.num_dims):
                 index = (index << 1) | ((coords_cart[::-1][j] >> (self.params.max_depth - i - 1)) & 1)
         return index
 
@@ -194,9 +197,7 @@ class Emulator:
         """
         # ** This is a dumb brute force way of doing it **
         # get list of all possible node points
-        shape = self.params.dims
-        n_dims = len(shape)
-        ranges = [np.linspace(*self.params.domain[i], 2 ** (self.params.max_depth) + 1) for i in range(len(shape))]
+        ranges = [np.linspace(*self.params.index_domain[i], 2 ** self.params.max_depth + 1) for i in range(self.num_dims)]
         X = np.meshgrid(*ranges, indexing='ij')
         Y = np.array([x.flatten() for x in X])
 
@@ -204,7 +205,7 @@ class Emulator:
         node_points = [Y[:, 0]]
         for i in range(1, len(Y[0, :]) - 1):
             is_node = False
-            for j in range(n_dims):
+            for j in range(self.num_dims):
                 p1 = Y[:, i].copy()
                 p1[j] += self.dx[j] / 2.
                 p2 = Y[:, i].copy()
@@ -252,9 +253,9 @@ class EmulatorCpp:
 
         # Load C++ emulator
         self.lib = ctypes.cdll.LoadLibrary(extern_lib_location)
-        self.setup_emulator = self.lib.non_linear2d_emulator_setup  # eval(f'self.lib.{extern_name}_emulator_setup')
-        self.interpolate = self.lib.non_linear2d_emulator_interpolate  # eval(f'self.lib.{extern_name}_emulator_interpolate')
-        self.free = self.lib.non_linear2d_emulator_free  # eval(f'self.lib.{extern_name}_emulator_free')
+        self.setup_emulator = eval(f'self.lib.{extern_name}_emulator_setup')
+        self.interpolate = eval(f'self.lib.{extern_name}_emulator_interpolate')
+        self.free = eval(f'self.lib.{extern_name}_emulator_free')
 
         # set input and output type
         self.setup_emulator.argtypes = [ctypes.c_char_p]
@@ -271,7 +272,10 @@ class EmulatorCpp:
         Destructor for emulator. This is needed to free the memory used by the C++ objects.
         :return:
         """
-        self.free(self.emulator)
+        try:
+            self.free(self.emulator)
+        except AttributeError:
+            return
 
     def __call__(self, inputs):
         """

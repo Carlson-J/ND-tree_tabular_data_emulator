@@ -42,6 +42,9 @@ def save_header_file(folder_path, emulator_name, encoding_type, indexing_type, n
     # save template parameters for the given table
     with open(save_name, 'w') as file:
         file.write("#undef ND_TREE_EMULATOR_TYPE\n")
+        file.write("#undef ND_TREE_EMULATOR_NAME_SETUP\n")
+        file.write("#undef ND_TREE_EMULATOR_NAME_INTERPOLATE\n")
+        file.write("#undef ND_TREE_EMULATOR_NAME_FREE\n")
         file.write("#define ND_TREE_EMULATOR_TYPE ")
         file.write(f"{type_header_conversion(encoding_type)}, ")
         file.write(f"{type_header_conversion(indexing_type)}, ")
@@ -104,17 +107,8 @@ def save_compact_mapping(compact_mapping, folder_path, emulator_name):
         file.attrs['max_test_points'] = compact_mapping.params.max_test_points
         file.attrs['relative_error'] = compact_mapping.params.relative_error
         file.attrs['domain'] = compact_mapping.params.domain
-        #
-        # parameter_group = file.create_group('parameters')
-        # parameter_group.create_dataset('domain', data=compact_mapping.params.domain, dtype=float)
-        #
-        # parameter_group.create_dataset('spacing', data=compact_mapping.params.spacing, dtype=float)
-        #
-        # domain_group = file.create_group('emulator_properties')
-        # domain_group.create_dataset("depth", data=compact_mapping.params.max_depth)
-        # domain_group.create_dataset("domain", data=compact_mapping.params.domain)
-        # spacing_index = [TRANSFORMS.index(t) for t in compact_mapping.params.spacing]
-        # domain_group.create_dataset("spacing", data=spacing_index)
+        file.attrs['index_domain'] = compact_mapping.params.index_domain
+        file.attrs['expand_index_domain'] = compact_mapping.params.expand_index_domain
         file.close()
 
 
@@ -149,8 +143,11 @@ def load_compact_mapping(filename, return_file_size=False):
         max_test_points = file.attrs['max_test_points']
         relative_error = file.attrs['relative_error']
         domain = file.attrs['domain']
+        index_domain = file.attrs['index_domain']
+        expand_index_domain = file.attrs['expand_index_domain']
         params = Parameters(max_depth, np.array(spacing), np.array([2**max_depth for i in range(len(spacing))]),
-                            error_threshold, np.array(model_classes), max_test_points, relative_error, np.array(domain))
+                            error_threshold, np.array(model_classes), max_test_points, relative_error, np.array(domain),
+                            np.array(index_domain), expand_index_domain)
         file.close()
 
     # Return compact emulator
@@ -170,14 +167,17 @@ def find_int_type(size):
     UNSIGNED_INT_8BIT_SIZE = 255
     UNSIGNED_INT_16BIT_SIZE = 65535
     UNSIGNED_INT_32BIT_SIZE = 4294967295
+    UNSIGNED_INT_64BIT_SIZE = 18446744073709551615
     if size < UNSIGNED_INT_8BIT_SIZE:
         dtype = np.uint8
     elif size < UNSIGNED_INT_16BIT_SIZE:
         dtype = np.uint16
     elif size < UNSIGNED_INT_32BIT_SIZE:
         dtype = np.uint32
-    else:
+    elif size < UNSIGNED_INT_64BIT_SIZE:
         dtype = np.uint64
+    else:
+        raise ValueError(f"Number of models exceeds largest int! Size needed = {size}")
     return dtype
 
 
@@ -237,23 +237,28 @@ def convert_tree(tree):
     model_arrays = [[]] * len(tree.params.model_classes)
 
     for leaf in leaves:
-        model_arrays[list(params.model_classes).index(leaf['model']['type'])].append(leaf['model']['weights'])
+        if leaf['model']['type'] is not None:
+            model_arrays[list(params.model_classes).index(leaf['model']['type'])].append(leaf['model']['weights'])
 
     # create encoding array
-    encoding_array = np.zeros([len(leaves)], dtype=int)
-    index_array = np.zeros([len(leaves)], dtype=int)
-    counters = np.zeros([len(model_arrays)])
+    encoding_array = []
+    index_array = []
+    counters = np.zeros([len(model_arrays)], dtype=int)
     offsets = [0] + [len(model_arrays[i]) for i in range(len(model_arrays) - 1)]
     for i in range(len(leaves)):
         # compute encoding array index
-        encoding_array[i] = compute_encoding_index(leaves[i], params)
+        if leaves[i]['model']['type'] is None:
+            continue
+        encoding_array.append(compute_encoding_index(leaves[i], params))
         # compute index-array index
         # # determine model type index
         type_index = list(params.model_classes).index(leaves[i]['model']['type'])
-        index_array[i] = counters[type_index] + offsets[type_index]
+        index_array.append(counters[type_index] + offsets[type_index])
         counters[type_index] += 1
 
-    # convert model arrays to a list of np arrays
+    # convert lists of np arrays
+    encoding_array = np.array(encoding_array, dtype=int)
+    index_array = np.array(index_array, dtype=int)
     for i in range(len(model_arrays)):
         model_arrays[i] = np.array(model_arrays[i])
 

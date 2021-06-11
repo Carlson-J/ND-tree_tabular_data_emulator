@@ -26,6 +26,7 @@ class DTree:
         self.data = data
         self.domain_spacings = compute_ranges(self.params.domain, self.params.spacing, self.params.dims)
         self.achieved_depth = 0
+        self.num_dims = len(self.params.dims)
 
         # determine the index domain. If we are not expanding it to fit, determine the domain rounding scheme
         self.domain_rounding_type = None
@@ -35,7 +36,7 @@ class DTree:
             self.index_domain = self.params.domain
             self.index_dims = self.params.dims
             # check if each element is it is a power of 2 after removing 1
-            for n in range(len(self.params.dims)):
+            for n in range(self.num_dims):
                 a = data['f'].shape[n] - 1
                 # (https://stackoverflow.com/questions/57025836/how-to-check-if-a-given-number-is-a-power-of-two)
                 # check if data is of the size 2^a + 1. If it is not, set the flag accordingly.
@@ -49,11 +50,11 @@ class DTree:
 
         # create the root node
         self.root = {
-            'domain': self.params.domain,
+            'domain': self.index_domain,
             'children': None,
             'id': [],
             'model': None,
-            'mask': create_mask(self.params.domain, self.params.domain, self.params.dims, self.params.spacing,
+            'mask': create_mask(self.index_domain, self.params.domain, self.params.dims, self.params.spacing,
                                 domain_rounding_type=self.domain_rounding_type),
             'error': None
         }
@@ -63,9 +64,30 @@ class DTree:
 
     def compute_index_domain(self):
         """
-        ---
+        Take the real domain and expand it (keeping the same point spacing) so that the number of point
+        in each dim is (2^k) + 1, where k is an integer. This mean the side with the largest number of points
+        will be increased to satisfy this and then all other sides will be increased to match.
+        Although this greatly increases the domain it will not increase the number of variables that need to
+        be saved do to optimization when saving the compact mapping.
         :return:
         """
+        largest_dim = np.max(self.params.dims)
+        # expand to be (2^k) + 1
+        new_dim_size = 2**int(np.ceil(np.log2(largest_dim - 1))) + 1
+        # transform domain
+        domain = transform_domain(self.params.domain, self.domain_spacings)
+        index_domain = domain.copy()
+        index_dims = np.zeros([self.num_dims])
+        # increase size of domain
+        for i in range(self.num_dims):
+            dx = (domain[i][1] - domain[i][0]) / (self.params.dims[i] - 1)
+            # compute number of indices to add
+            points_to_add = new_dim_size - self.params.dims[i]
+            # compute new domain
+            index_domain[i][1] += points_to_add*dx
+            index_dims[i] = new_dim_size
+
+        return index_domain, index_dims
 
     def get_max_depth(self):
         """
@@ -86,7 +108,7 @@ at each corner. This can also result in more discontinuous solutions at cell bou
 """)
 
         max_depth = np.infty
-        for num_vars in self.params.dims:
+        for num_vars in self.index_dims:
             tmp = int(np.ceil(np.log2(num_vars - 1)))
             if max_depth > tmp:
                 max_depth = tmp
@@ -114,7 +136,7 @@ The max depth has been changed to {max_depth}.
             if len(node['children'][0]['id']) > self.achieved_depth:
                 self.achieved_depth = len(node['children'][0]['id'])
             # refine children nodes
-            for i in range(2 ** len(self.params.dims)):
+            for i in range(2 ** self.num_dims):
                 self.refine_region(node['children'][i])
         else:
             node['model'] = fit
@@ -134,7 +156,6 @@ The max depth has been changed to {max_depth}.
             }
         :return: None
         """
-        num_dims = len(node['domain'])
         assert node['children'] is None
         # do any needed transforms
         domain = transform_domain(node['domain'], self.params.spacing, reverse=False)
@@ -145,15 +166,15 @@ The max depth has been changed to {max_depth}.
         dx = (c2 - c1) / 2.
         # add children nodes
         node['children'] = []
-        for i in range(2 ** num_dims):
+        for i in range(2 ** self.num_dims):
             # define new domain
             # # get corner with minimum values corresponding to index 0 in the new cell/node
-            c1_new = np.zeros([num_dims])
-            for j in range(num_dims):
+            c1_new = np.zeros([self.num_dims])
+            for j in range(self.num_dims):
                 c1_new[j] = c1[j] + dx[j] * ((i >> j) & 1)
             c2_new = c1_new + dx
             # # compute new domain
-            domain_new = np.zeros([num_dims, 2])
+            domain_new = np.zeros([self.num_dims, 2])
             domain_new[:, 0] = c1_new
             domain_new[:, 1] = c2_new
 
@@ -183,6 +204,11 @@ The max depth has been changed to {max_depth}.
         assert (len(self.params.model_classes) > 0)
         # create test set
         dims = get_mask_dims(node['mask'])
+        if dims is None:
+            # this node is not in the real domain, but only in the index domain. Set model to None and error to 0
+            fit = {'type': None, 'weights': None}
+            error = 0
+            return fit, error
         random_indices = np.random.permutation(np.prod(dims, dtype=int))[:min([np.prod(dims), self.params.max_test_points])]
         test_indices = np.indices(dims).reshape([len(dims), np.prod(dims, dtype=int)]).T[random_indices]
         test_points = np.zeros([len(random_indices), len(dims)])
@@ -193,12 +219,12 @@ The max depth has been changed to {max_depth}.
         for model_class in self.params.model_classes:
             if model_class['type'] == 'nd-linear':
                 # fit model
-                X = np.zeros([2, len(self.params.dims)])
-                for i in range(len(self.params.dims)):
+                X = np.zeros([2, self.num_dims])
+                for i in range(self.num_dims):
                     X[0, i] = self.domain_spacings[i][node['mask'][i]][0]
                     X[1, i] = self.domain_spacings[i][node['mask'][i]][-1]
                 weights = fit_nd_linear_model(self.data['f'][node['mask']], X)
-                fit = {'type': model_class, 'weights': weights, 'transforms': [None] * len(self.params.dims)}
+                fit = {'type': model_class, 'weights': weights, 'transforms': [None] * self.num_dims}
                 # compute error
                 f_interp = nd_linear_model(weights, test_points)
                 f_true = np.array([self.data['f'][node['mask']][tuple(a)] for a in test_indices])
@@ -259,4 +285,4 @@ The max depth has been changed to {max_depth}.
         """
         return Parameters(self.achieved_depth, self.params.spacing, self.params.dims, self.params.error_threshold,
                           self.params.model_classes, self.params.max_test_points, self.params.relative_error,
-                          self.params.domain)
+                          self.params.domain, self.index_domain, self.params.expand_index_domain)
