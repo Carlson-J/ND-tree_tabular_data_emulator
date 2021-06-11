@@ -58,12 +58,13 @@ def save_header_file(folder_path, emulator_name, encoding_type, indexing_type, n
         file.write(f"#define ND_TREE_EMULATOR_NAME_FREE {emulator_name}_emulator_free\n")
 
 
-def save_compact_mapping(compact_mapping, folder_path, emulator_name):
+def save_compact_mapping(compact_mapping, folder_path, emulator_name, return_file_size=False):
     """
     Save the compact mapping array in an hdf5 file.
     :param compact_mapping: (CompactMapping)
     :param folder_path: (str)
     :param emulator_name: (str)
+    :param return_file_size: (bool) return the size of the saved mapping
     :return:
     """
     # Save the mapping using the smallest int size needed.
@@ -110,7 +111,8 @@ def save_compact_mapping(compact_mapping, folder_path, emulator_name):
         file.attrs['index_domain'] = compact_mapping.params.index_domain
         file.attrs['expand_index_domain'] = compact_mapping.params.expand_index_domain
         file.close()
-
+    if return_file_size:
+        return path.getsize(filename)
 
 def load_compact_mapping(filename, return_file_size=False):
     """

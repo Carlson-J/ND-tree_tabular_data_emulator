@@ -181,14 +181,15 @@ class Emulator:
         """
         return CompactMapping(self.encoding_array, self.index_array, self.offsets, self.model_arrays, self.params)
 
-    def save(self, folder_path, emulator_name):
+    def save(self, folder_path, emulator_name, return_file_size=False):
         """
         save emulator using compact encoding scheme
         :param folder_path: (str) location of folder to save emulator in
         :param emulator_name: (str) name of emulator
+        :param return_file_size: (bool) return saved file siaze
         :return:
         """
-        save_compact_mapping(self.get_compact_mapping(), folder_path, emulator_name)
+        save_compact_mapping(self.get_compact_mapping(), folder_path, emulator_name, return_file_size=return_file_size)
 
     def get_cell_locations(self):
         """
