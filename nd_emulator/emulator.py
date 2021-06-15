@@ -15,7 +15,7 @@ import h5py
 
 
 def build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, max_test_points=100,
-                   relative_error=False, expand_index_domain=False):
+                   relative_error=False, expand_index_domain=False, return_tree=False):
     """
     Creates an emulator using ND-tree decomposition over the given domain. The refinement of the tree is carried out
     until a specified error threshold is reached.
@@ -42,7 +42,8 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
     :param expand_index_domain: (bool) Expand the index domain so that the number of points in each dim are equal
         and are of the form (2^k) + 1. This will allow for efficient mapping with no extra cost except that the
         integers needed to represent the values in the encoding array will increase in bytes size.
-    :return: (Emulator)
+    :param return_tree: (bool) return tree
+    :return: (Emulator, optional-> DTree)
     """
     # check that data is correct format
     assert (type(data['f']) is np.ndarray)
@@ -64,7 +65,10 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
     # create emulator
     emulator = Emulator(compact_mapping)
 
-    return emulator
+    if return_tree:
+        return emulator, tree
+    else:
+        return emulator
 
 
 def load_emulator(filename):

@@ -200,15 +200,14 @@ The max depth has been changed to {max_depth}.
         :return: fit, error
         """
         current_error = np.infty
-        best_fit = None
+        best_fit = {'type': None, 'weights': None}
         assert (len(self.params.model_classes) > 0)
         # create test set
         dims = get_mask_dims(node['mask'])
         if dims is None:
             # this node is not in the real domain, but only in the index domain. Set model to None and error to 0
-            fit = {'type': None, 'weights': None}
             error = 0
-            return fit, error
+            return best_fit, error
         random_indices = np.random.permutation(np.prod(dims, dtype=int))[:min([np.prod(dims), self.params.max_test_points])]
         test_indices = np.indices(dims).reshape([len(dims), np.prod(dims, dtype=int)]).T[random_indices]
         test_points = np.zeros([len(random_indices), len(dims)])

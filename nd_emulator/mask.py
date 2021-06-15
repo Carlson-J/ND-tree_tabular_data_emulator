@@ -21,6 +21,7 @@ def create_mask(sub_domain, domain, dims, spacings, domain_rounding_type=None):
             A mask for nd data. It is assumed that the data is evenly spaced after the transform has been done.
             For sub_domains that are entirely outside the domain, None is returned for the mask.
             For sub_domains that are partially outside the domain, the intersection of the two are returned.
+            For sub_domains that condain only an edge, i.e., the hyper-volume is zero, None is returned
             :param sub_domain: (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
                 dimension for the new domain.
             :param domain: (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
@@ -29,7 +30,7 @@ def create_mask(sub_domain, domain, dims, spacings, domain_rounding_type=None):
             :param spacings: (list) how the points are spaced in each dimension.
             :param domain_rounding_type: [None, 'expand', 'contract'] How to handle subdomains that do not line up with
                 points. expand will round the index to the extreme and contract will do the opposite.
-            :return (tuple) of intervals or None if the intersection between domains is the empty set
+            :return (tuple) of intervals or None if the intersection between domains is the empty set or None
             """
     EPS = 10 ** -10
     # Make sure the dimensions are correct
@@ -75,6 +76,9 @@ def create_mask(sub_domain, domain, dims, spacings, domain_rounding_type=None):
             hi = int(np.floor(hi_tmp))
         else:
             raise ValueError(f"Unknown domain_rounding_type: {domain_rounding_type}")
+        # return None if one dim is flat
+        if hi == lo:
+            return None
         index_ranges[i] = [lo, hi + 1]
     mask = []
     for i in range(len(index_ranges)):
