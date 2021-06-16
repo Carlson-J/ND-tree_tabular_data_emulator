@@ -6,7 +6,7 @@ from .parameter_struct import Parameters
 
 
 class DTree:
-    def __init__(self, tree_params, data):
+    def __init__(self, tree_params, data, error_type='max'):
         """
         Creates an ND-tree over the given domain. The refinement of the tree is carried out until
         a specified error threshold is reached.
@@ -18,7 +18,8 @@ class DTree:
                 x2 twice and x2 once. Any number of derivative combinations can be included but the order should be the
                 same. The model classes will check if all the needed derivatives are available.
         }
-        The size of each dim should be (2^k)+1, where k is some integer >= max_depth.
+        The size of each dim should be (2^k)+1, where k is some integer >= max_depth.'
+        :param error_type: (str) type of error to use. Options: ['L1', 'RMSE', 'max']
         :return:
         """
         # constants needed for saving and loading things
@@ -27,6 +28,7 @@ class DTree:
         self.domain_spacings = compute_ranges(self.params.domain, self.params.spacing, self.params.dims)
         self.achieved_depth = 0
         self.num_dims = len(self.params.dims)
+        self.error_type = error_type
 
         # determine the index domain. If we are not expanding it to fit, determine the domain rounding scheme
         self.domain_rounding_type = None
@@ -244,10 +246,18 @@ The max depth has been changed to {max_depth}.
         :param interp: (nd array)
         :return: (float) error
         """
+        # compute error based on type of error desired
         if self.params.relative_error:
-            return np.max(abs(true - interp) / abs(true))
+            errors = abs(true - interp) / abs(true)
         else:
-            return np.max(abs(true - interp))
+            errors = abs(true - interp)
+        if self.error_type == 'L1':
+            return np.mean(errors)
+        elif self.error_type == "RMSE":
+            return np.sqrt(np.mean(errors**2))
+        elif self.error_type == "max":
+            return max(errors)
+
 
     def _get_leaves(self, node, leaf_list):
         """
