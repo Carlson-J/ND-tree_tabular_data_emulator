@@ -132,7 +132,7 @@ The max depth has been changed to {max_depth}.
         node['error'] = error
         # check error and depth
 
-        if error >= self.params.error_threshold and self.max_depth > len(node['id']):
+        if error is not None and error >= self.params.error_threshold and self.max_depth > len(node['id']):
             # create children nodes
             self.create_children_nodes(node)
             if len(node['children'][0]['id']) > self.achieved_depth:
@@ -208,7 +208,7 @@ The max depth has been changed to {max_depth}.
         dims = get_mask_dims(node['mask'])
         if dims is None:
             # this node is not in the real domain, but only in the index domain. Set model to None and error to 0
-            error = 0
+            error = None
             return best_fit, error
         random_indices = np.random.permutation(np.prod(dims, dtype=int))[:min([np.prod(dims), self.params.max_test_points])]
         test_indices = np.indices(dims).reshape([len(dims), np.prod(dims, dtype=int)]).T[random_indices]
