@@ -1,0 +1,19 @@
+#!/bin/bash -login
+ 
+#PBS -l walltime=8:00:00
+#PBS -l nodes=1:ppn=1
+#PBS -l mem=10gb
+#PBS -j oe
+#PBS -N jupyter-session-JC
+ 
+unset XDG_RUNTIME_DIR
+
+conda activate nd_emulator
+
+# this is how I enable my local python environment
+export PYTHONPATH=${PYTHONPATH}:/mnt/home/carls502/ANL/ND-tree_tabular_data_emulator/
+
+# alternatively start a jupyter notebook by replacing jupyter-lab with jupyter-notebook
+# 48823 is the port where your jupyter session will listen, feel free to pick a different 5 digit number below 65535
+# we will call this port the "remote port"
+jupyter-lab --ip='*' --port=48327 --no-browser
