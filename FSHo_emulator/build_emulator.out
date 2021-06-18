@@ -1,0 +1,10 @@
+/var/lib/slurmd/job28816429/slurm_script: line 10: ../../../load_env: No such file or directory
+/var/lib/slurmd/job28816429/slurm_script: line 11: /mnt/home/carls502/anaconda3/condabin/conda: Permission denied
+/mnt/home/carls502/ANL/ND-tree_tabular_data_emulator/nd_emulator/domain_functions.py:36: FutureWarning: elementwise comparison failed; returning scalar instead, but in the future will perform elementwise comparison
+  if spacings[i] == 'linear':
+/mnt/home/carls502/ANL/ND-tree_tabular_data_emulator/nd_emulator/domain_functions.py:38: FutureWarning: elementwise comparison failed; returning scalar instead, but in the future will perform elementwise comparison
+  elif spacings[i] == 'log':
+/mnt/home/carls502/ANL/ND-tree_tabular_data_emulator/nd_emulator/domain_functions.py:36: FutureWarning: elementwise comparison failed; returning scalar instead, but in the future will perform elementwise comparison
+  if spacings[i] == 'linear':
+/mnt/home/carls502/ANL/ND-tree_tabular_data_emulator/nd_emulator/domain_functions.py:38: FutureWarning: elementwise comparison failed; returning scalar instead, but in the future will perform elementwise comparison
+  elif spacings[i] == 'log':
