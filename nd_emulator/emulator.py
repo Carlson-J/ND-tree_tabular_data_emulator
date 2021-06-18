@@ -34,7 +34,8 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
     :param spacing: (list) The spacing, either 'linear' or 'log', of each dimension, e.g., ['linear', 'linear', 'log']
     :param model_classes: (list of dicts) list of model classes to use when training. Each entry should have the
         form {  'type': (string),
-                'transforms': (list of length dims of strings) None or 'log', being the transform in each dim.
+                'transforms': (string) None or 'log', being the transform on the function f. f is first conditioned to
+                    be all positive before the log is taken. A variable that saves the transform is also saved.
                 }
     :param max_test_points: (int) maximum number of test points to use when computing the error in a cell.
     :param relative_error: use relative error, i.e., (f_interp - f_true)/f_true. This will have issues if you go
@@ -53,9 +54,9 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
         assert (data[key].shape == dims)
 
     # construct a dictionary with all the needed parameters
-    tree_parameters = Parameters(max_depth, np.array(spacing), np.array(dims, dtype=int), error_threshold, np.array(model_classes),
-                                 max_test_points, relative_error, np.array(domain, dtype=float), np.array([None]),
-                                 expand_index_domain)
+    tree_parameters = Parameters(max_depth, np.array(spacing), np.array(dims, dtype=int), error_threshold,
+                                 np.array(model_classes), max_test_points, relative_error,
+                                 np.array(domain, dtype=float), np.array([None]), expand_index_domain)
 
     # build tree
     tree = DTree(tree_parameters, data, error_type=error_type)
@@ -121,7 +122,10 @@ class Emulator:
             weights, index = self.find_model(point)
             # compute fit
             if self.params.model_classes[index]['type'] == 'nd-linear':
-                sol[i] = nd_linear_model(weights, point)[0]
+                if self.params.model_classes[index]['transforms'] is not None:
+                    sol[i] = nd_linear_model(weights, point, transform=self.params.model_classes[index]['transforms'])[0]
+                else:
+                    sol[i] = nd_linear_model(weights, point)[0]
             else:
                 raise ValueError
         return sol
@@ -196,9 +200,10 @@ class Emulator:
         """
         save_compact_mapping(self.get_compact_mapping(), folder_path, emulator_name, return_file_size=return_file_size)
 
-    def get_cell_locations(self):
+    def get_cell_locations(self, include_model_type=False):
         """
         Compute the locations of all the boundaries of the cells.
+        :param include_model_type: (bool) return model type at each point as well.
         :return:
         """
         # ** This is a dumb brute force way of doing it **
@@ -206,23 +211,37 @@ class Emulator:
         ranges = [np.linspace(*self.params.index_domain[i], 2 ** self.params.max_depth + 1) for i in range(self.num_dims)]
         X = np.meshgrid(*ranges, indexing='ij')
         Y = np.array([x.flatten() for x in X])
+        if include_model_type:
+            model_types = []
+            junk, index = self.find_model(Y[:, 0])
+            model_types.append([self.params.model_classes[index]['type'], self.params.model_classes[index]['transforms']])
 
         # node points are ones where moving across the point on any axis changed the domain you ar in
         node_points = [Y[:, 0]]
         for i in range(1, len(Y[0, :]) - 1):
             is_node = False
+            model_type = None
             for j in range(self.num_dims):
                 p1 = Y[:, i].copy()
                 p1[j] += self.dx[j] / 2.
                 p2 = Y[:, i].copy()
                 p2[j] -= self.dx[j] / 2.
                 if self.find_model_index(p1) != self.find_model_index(p2):
+                    if include_model_type:
+                        junk, index = self.find_model(p1)
+                        model_type = [self.params.model_classes[index]['type'], self.params.model_classes[index]['transforms']]
                     is_node = True
                     break
             if is_node:
+                if include_model_type:
+                    model_types.append(model_type)
                 node_points.append(Y[:, i])
         node_points.append(Y[:, -1])
 
+        if include_model_type:
+            junk, index = self.find_model(Y[:, -1])
+            model_types.append([self.params.model_classes[index]['type'], self.params.model_classes[index]['transforms']])
+            return np.array(node_points), model_types
         return np.array(node_points)
 
 

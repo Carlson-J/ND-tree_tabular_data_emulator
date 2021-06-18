@@ -39,7 +39,7 @@ def test_2d_interpolation(dataset_2d_log):
     data, domain, spacing = dataset_2d_log
     error_threshold = 0
     max_depth = 2
-    model_classes = [{'type': 'nd-linear', 'transforms': [None] * 2}]
+    model_classes = [{'type': 'nd-linear', 'transforms': None}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     # Compute new values over domain
@@ -71,7 +71,7 @@ def test_basic_4d(dataset_4d):
     data, domain, spacing = dataset_4d
     error_threshold = 0
     max_depth = 2
-    model_classes = [{'type': 'nd-linear', 'transforms': ['linear'] * 4}]
+    model_classes = [{'type': 'nd-linear'}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     inputs = np.array([
@@ -101,7 +101,7 @@ def test_saving_nd_tree(dataset_4d_log):
     data, domain, spacing = dataset_4d_log
     error_threshold = 0
     max_depth = 2
-    model_classes = [{'type': 'nd-linear', 'transforms': ['linear'] * 4}]
+    model_classes = [{'type': 'nd-linear', 'transforms': None}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     inputs = np.random.uniform(0.1, 0.5, size=[100, len(spacing)])
@@ -129,7 +129,7 @@ def test_1d_interpolation():
     N = 200
     error_threshold = 1e-2
     max_depth = 5
-    model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
+    model_classes = [{'type': 'nd-linear', 'transforms': None}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     # Compute new values over domain
@@ -151,41 +151,6 @@ def test_1d_interpolation():
     plt.xlabel('x')
     plt.ylabel('y')
     plt.show()
-
-
-@pytest.mark.dependency()
-def test_2d_log_transforms(dataset_2d_log_non_linear):
-    """
-    GIVEN: 2d function evaluations and a domain.
-    WHEN: Create an emulator from data with log transforms
-    THEN: Correctly sorts and interpolates data
-
-    Note: This data saved here is used by the cpp test. It must be copied to the correct dir to be updated.
-    """
-    EPS = 10 ** -1
-    N = 200
-    data, domain, spacing = dataset_2d_log_non_linear
-    error_threshold = 0.01
-    max_depth = 2
-    model_classes = [{'type': 'nd-linear', 'transforms': [None, 'log']}]
-    # Create emulator
-    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
-    # Compute new values over domain
-    X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.logspace(np.log10(domain[1][0])
-                                                                               , np.log10(domain[1][1]), N))
-    input = np.array([X.flatten(), Y.flatten()]).T
-    f_interp = emulator(input).reshape([N, N])
-    f_true = X * np.log10(Y)
-    error = abs(f_true - f_interp)
-    # resize and plot
-    plt.imshow(error, origin='lower')
-    plt.title("No grid structure should be seen")
-    plt.colorbar()
-    plt.show()
-
-    emulator.save('.', 'non_linear2d')
-    # check if error is low
-    assert np.all(error <= EPS)
 
 
 @pytest.mark.dependency(depends=["test_2d_log_transforms"])
@@ -267,7 +232,7 @@ def test_non_aligned_data():
     N = 500
     error_threshold = 1e-1
     max_depth = 6
-    model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
+    model_classes = [{'type': 'nd-linear'}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     # Compute new values over domain
@@ -312,7 +277,7 @@ def test_miss_aligned_2d():
     N = 500
     error_threshold = 1e-0
     max_depth = 6
-    model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
+    model_classes = [{'type': 'nd-linear'}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     # Compute new values over domain
@@ -361,7 +326,7 @@ def test_miss_aligned_3d():
 
     # build emulator
     error_threshold = 1e-10
-    model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
+    model_classes = [{'type': 'nd-linear'}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes,
                               expand_index_domain=True)
@@ -393,7 +358,7 @@ def test_miss_aligned_2d_extended():
     N = 500
     error_threshold = 1e-0
     max_depth = 6
-    model_classes = [{'type': 'nd-linear', 'transforms': [None]}]
+    model_classes = [{'type': 'nd-linear'}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes,
                               expand_index_domain=True)
@@ -423,3 +388,236 @@ def test_miss_aligned_2d_extended():
     plt.xlabel('x')
     plt.ylabel('y')
     plt.show()
+
+
+def test_cpp_emulator_miss_aligned_2d():
+    save_directory = './'
+    emulator_name = 'miss_aligned_2d'
+    cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
+    make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
+
+    EPS = 10**-10
+    # load CPP emulator
+    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
+                               save_directory + '/' + emulator_name + "_lib.so")
+
+    # load python emulator
+    emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")
+
+    # create test data
+    domain = emulator_py.params.domain
+    low = np.array(domain)[:, 0]
+    high = np.array(domain)[:, 1]
+    N = 100
+    inputs = np.zeros([len(domain[:, 0]), N])
+    for i in range(len(domain[:, 0])):
+        inputs[i, :] = np.random.uniform(low[i], high[i], size=[N])
+
+    # time the evaluation of both methods
+    # # CPP
+    start_cpp = time()
+    out_cpp = emulator_cpp(inputs)
+    end_cpp = time()
+    dt_cpp = end_cpp - start_cpp
+    # # Python
+    start_py = time()
+    out_py = emulator_py(inputs.T)
+    end_py = time()
+    dt_py = end_py - start_py
+
+    # check if answer is the same
+    diff = abs(out_cpp - out_py)
+
+    assert (np.max(diff) < EPS)
+
+    print(f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py/dt_cpp}\ndiff: L1={np.mean(diff)}, LI={np.max(diff)}")
+
+
+def test_cpp_emulator_miss_aligned_2d_extended():
+    save_directory = './'
+    emulator_name = 'miss_aligned_2d_extended'
+    cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
+    make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
+
+    EPS = 10**-10
+    # load CPP emulator
+    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
+                               save_directory + '/' + emulator_name + "_lib.so")
+
+    # load python emulator
+    emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")
+
+    # create test data
+    domain = emulator_py.params.domain
+    low = np.array(domain)[:, 0]
+    high = np.array(domain)[:, 1]
+    N = 100
+    inputs = np.zeros([len(domain[:, 0]), N])
+    for i in range(len(domain[:, 0])):
+        inputs[i, :] = np.random.uniform(low[i], high[i], size=[N])
+
+    # time the evaluation of both methods
+    # # CPP
+    start_cpp = time()
+    out_cpp = emulator_cpp(inputs)
+    end_cpp = time()
+    dt_cpp = end_cpp - start_cpp
+    # # Python
+    start_py = time()
+    out_py = emulator_py(inputs.T)
+    end_py = time()
+    dt_py = end_py - start_py
+
+    # check if answer is the same
+    diff = abs(out_cpp - out_py)
+
+    assert (np.max(diff) < EPS)
+
+    print(f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py/dt_cpp}\ndiff: L1={np.mean(diff)}, LI={np.max(diff)}")
+
+
+def test_linear_log_transform():
+    """
+    GIVEN: data and log transformed model class
+    WHEN: emulator is made
+    THEN: correctly interpolates in log space and transforms back.
+    """
+
+    # create function and domain
+    domain = [[0, 3]]
+    x = np.linspace(domain[0][0], domain[0][1], 2 ** 5 + 1)
+    y = 3 * x
+    y[x > 1] = np.sin(x[x > 1])
+    y[x > 2] = 3 ** x[x > 2]
+    data = {'f': y}
+    spacing = ['linear']
+
+    # build tree
+    EPS = 10 ** -2
+    N = 200
+    error_threshold = 1e-1
+    max_depth = 5
+    model_classes = [{'type': 'nd-linear', 'transforms': 'log'}]
+    # Create emulator
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, relative_error=True)
+    # Compute new values over domain
+    x_test = np.linspace(domain[0][0], domain[0][1], N).reshape([N, 1])
+    f_interp = emulator(x_test)
+    f_true = 3 * x_test
+    f_true[x_test > 1] = np.sin(x_test[x_test > 1])
+    f_true[x_test > 2] = 3**x_test[x_test > 2]
+    error = abs(f_true.flatten() - f_interp)
+    # get node locations
+    cell_locations = emulator.get_cell_locations()
+    plt.figure()
+    plt.plot(cell_locations.flatten(), min(y) * np.ones_like(cell_locations.flatten()), '*', label='Cell Locations')
+    # Plot errors
+    plt.plot(x_test, np.log10(error), '--', label=' log error')
+    plt.plot(x_test, f_true, label='true')
+    plt.plot(x_test, f_interp, '--', label='interp')
+    plt.plot(x, y, '.', label='data')
+    plt.legend()
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.show()
+
+    # make sure the errors do not change from where they are right now
+    # in each section. Values where computed when things looked right.
+    s1_err = np.max(error[(x_test.flatten() < 0.9)])
+    s2_err = np.max(error[(x_test.flatten() > 1.1) & (x_test.flatten() < 1.9)])
+    s3_err = np.max(error[x_test.flatten() > 2.1])
+    assert(s3_err < 10**-13)
+    assert(s2_err < 0.02)
+    assert(s1_err < 0.1)
+
+
+def test_2d_log_transforms(dataset_2d_non_linear):
+    """
+    GIVEN: 2d function evaluations and a domain.
+    WHEN: Create an emulator from data with log transforms
+    THEN: Correctly sorts and interpolates data
+
+    Note: This data saved here is used by the cpp test. It must be copied to the correct dir to be updated.
+    """
+    EPS = 0.03
+    N = 200
+    data, domain, spacing = dataset_2d_non_linear
+    error_threshold = 0.01
+    max_depth = 2
+    model_classes = [{'type': 'nd-linear', 'transforms': 'log'}]
+    # Create emulator
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
+    # Compute new values over domain
+    X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.linspace(domain[1][0], domain[1][1], N))
+    input = np.array([X.flatten(), Y.flatten()]).T
+    f_interp = emulator(input).reshape([N, N])
+    f_true = np.cos(X)*2 + np.sin(Y)
+    error = abs(f_true - f_interp)
+    # resize and plot
+    plt.imshow(error, origin='lower')
+    plt.title("Grid structure should be seen")
+    plt.colorbar()
+    plt.show()
+
+    emulator.save('.', 'non_linear2d')
+    # check if error is low
+    assert np.all(error <= EPS)
+
+
+def test_linear_model_switching():
+    """
+    GIVEN: data and log transformed model class
+    WHEN: emulator is made
+    THEN: correctly interpolates in log space and transforms back.
+    """
+
+    # create function and domain
+    domain = [[0, 3]]
+    x = np.linspace(domain[0][0], domain[0][1], 2 ** 5 + 1)
+    y = 3 * x
+    y[x > 1] = np.sin(x[x > 1])
+    y[x > 2] = 3 ** x[x > 2]
+    data = {'f': y}
+    spacing = ['linear']
+
+    # build tree
+    EPS = 10 ** -2
+    N = 200
+    error_threshold = 1e-2
+    max_depth = 5
+    model_classes = [{'type': 'nd-linear', 'transforms': None}, {'type': 'nd-linear', 'transforms': 'log'}]
+    # Create emulator
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, relative_error=True)
+    # Compute new values over domain
+    x_test = np.linspace(domain[0][0], domain[0][1], N).reshape([N, 1])
+    f_interp = emulator(x_test)
+    f_true = 3 * x_test
+    f_true[x_test > 1] = np.sin(x_test[x_test > 1])
+    f_true[x_test > 2] = 3**x_test[x_test > 2]
+    error = abs(f_true.flatten() - f_interp)
+    # get node locations
+    cell_locations, model_types = emulator.get_cell_locations(include_model_type=True)
+    colors_map = np.array(model_types)[:, 1] == 'log'
+    colors_map_i = [not v for v in colors_map]
+
+    plt.figure()
+    plt.plot(cell_locations.flatten()[colors_map_i], min(y) * np.ones_like(cell_locations.flatten()[colors_map_i]), 'b*', label='Cell Locations lin')
+    plt.plot(cell_locations.flatten()[colors_map], min(y) * np.ones_like(cell_locations.flatten())[colors_map], 'r*', label='Cell Locations log')
+    # Plot errors
+    plt.plot(x_test, np.log10(error), '--', label=' log error')
+    plt.plot(x_test, f_true, label='true')
+    plt.plot(x_test, f_interp, '--', label='interp')
+    plt.plot(x, y, '.', label='data')
+    plt.legend()
+    plt.xlabel('x')
+    plt.ylabel('y')
+    plt.show()
+
+    # make sure the errors do not change from where they are right now
+    # in each section. Values where computed when things looked right.
+    s1_err = np.max(error[(x_test.flatten() < 0.9)])
+    s2_err = np.max(error[(x_test.flatten() > 1.1) & (x_test.flatten() < 1.9)])
+    s3_err = np.max(error[x_test.flatten() > 2.1])
+    assert(s3_err < 10**-13)
+    assert(s2_err < 0.01)
+    assert(s1_err < 10**-13)

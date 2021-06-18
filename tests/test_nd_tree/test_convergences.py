@@ -16,7 +16,7 @@ def test_2d_convergence(dataset_2d_non_linear):
     N = 100
     data, domain, spacing = dataset_2d_non_linear
     error_threshold = 0
-    model_classes = [{'type': 'nd-linear', 'transforms': [None] * 2}]
+    model_classes = [{'type': 'nd-linear'}]
 
     # Compute true values
     X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.linspace(domain[1][0], domain[1][1], N))
@@ -66,7 +66,7 @@ def test_4d_convergence(dataset_4d_log_non_linear):
     inputs = np.random.uniform(low, high, size=[N, 4])
     f_true = (inputs[:, 0] ** 2 * inputs[:, 1] * inputs[:, 2] * inputs[:, 3] + 1).flatten()
     error_threshold = 0
-    model_classes = [{'type': 'nd-linear', 'transforms': [None] * 4}]
+    model_classes = [{'type': 'nd-linear'}]
 
     # error arrays
     num_depths = 2

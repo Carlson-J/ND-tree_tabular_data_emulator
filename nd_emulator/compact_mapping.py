@@ -225,6 +225,18 @@ class CompactMapping:
     params: Parameters
 
 
+def convert_model_class_to_string(model_class):
+    """
+    Dictionary containing the model class type and transforms
+    :param model_class: (dict)
+    :return: (string) unique name of model class
+    """
+    if 'transforms' in model_class and model_class['transforms'] is not None:
+        return model_class['type'] + "___" + model_class['transforms']
+    else:
+        return model_class['type']
+
+
 def convert_tree(tree):
     """
     Convert the tree to a computationally efficient mapping scheme that can easily be saved and queried.
@@ -236,11 +248,16 @@ def convert_tree(tree):
     leaves = tree.get_leaves()
     params = tree.get_params()
     # Create model arrays
-    model_arrays = [[]] * len(tree.params.model_classes)
+    model_arrays = []
+    model_classes_str = []
+    for model_class in tree.params.model_classes:
+        model_arrays.append([])
+        model_classes_str.append(convert_model_class_to_string(model_class))
 
     for leaf in leaves:
         if leaf['model']['type'] is not None:
-            model_arrays[list(params.model_classes).index(leaf['model']['type'])].append(leaf['model']['weights'])
+            model_string = convert_model_class_to_string(leaf['model']['type'])
+            model_arrays[list(model_classes_str).index(model_string)].append(leaf['model']['weights'])
 
     # create encoding array
     encoding_array = []
@@ -254,7 +271,7 @@ def convert_tree(tree):
         encoding_array.append(compute_encoding_index(leaves[i], params))
         # compute index-array index
         # # determine model type index
-        type_index = list(params.model_classes).index(leaves[i]['model']['type'])
+        type_index = list(model_classes_str).index(convert_model_class_to_string(leaves[i]['model']['type']))
         index_array.append(counters[type_index] + offsets[type_index])
         counters[type_index] += 1
 

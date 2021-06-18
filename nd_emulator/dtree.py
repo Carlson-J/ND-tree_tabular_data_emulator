@@ -75,7 +75,7 @@ class DTree:
         """
         largest_dim = np.max(self.params.dims)
         # expand to be (2^k) + 1
-        new_dim_size = 2**int(np.ceil(np.log2(largest_dim - 1))) + 1
+        new_dim_size = 2 ** int(np.ceil(np.log2(largest_dim - 1))) + 1
         # transform domain
         domain = transform_domain(self.params.domain, self.domain_spacings)
         index_domain = domain.copy()
@@ -86,7 +86,7 @@ class DTree:
             # compute number of indices to add
             points_to_add = new_dim_size - self.params.dims[i]
             # compute new domain
-            index_domain[i][1] += points_to_add*dx
+            index_domain[i][1] += points_to_add * dx
             index_dims[i] = new_dim_size
 
         return index_domain, index_dims
@@ -210,7 +210,8 @@ The max depth has been changed to {max_depth}.
             # this node is not in the real domain, but only in the index domain. Set model to None and error to 0
             error = None
             return best_fit, error
-        random_indices = np.random.permutation(np.prod(dims, dtype=int))[:min([np.prod(dims), self.params.max_test_points])]
+        random_indices = np.random.permutation(np.prod(dims, dtype=int))[
+                         :min([np.prod(dims), self.params.max_test_points])]
         test_indices = np.indices(dims).reshape([len(dims), np.prod(dims, dtype=int)]).T[random_indices]
         test_points = np.zeros([len(random_indices), len(dims)])
         for i in range(len(dims)):
@@ -218,16 +219,21 @@ The max depth has been changed to {max_depth}.
 
         # try each model class to which gives the lowest predicted error
         for model_class in self.params.model_classes:
+            # set default transform to None
+            if not ("transforms" in model_class):
+                model_class['transforms'] = None
             if model_class['type'] == 'nd-linear':
                 # fit model
+                # # package needed domain vars
                 X = np.zeros([2, self.num_dims])
                 for i in range(self.num_dims):
                     X[0, i] = self.domain_spacings[i][node['mask'][i]][0]
                     X[1, i] = self.domain_spacings[i][node['mask'][i]][-1]
-                weights = fit_nd_linear_model(self.data['f'][node['mask']], X)
-                fit = {'type': model_class, 'weights': weights, 'transforms': [None] * self.num_dims}
+                weights = fit_nd_linear_model(self.data['f'][node['mask']], X, transforms=model_class['transforms'])
+
+                fit = {'type': model_class, 'weights': weights}
                 # compute error
-                f_interp = nd_linear_model(weights, test_points)
+                f_interp = nd_linear_model(weights, test_points, transform=model_class['transforms'])
                 f_true = np.array([self.data['f'][node['mask']][tuple(a)] for a in test_indices])
                 err = self.compute_error(f_true, f_interp)
             else:
@@ -241,7 +247,8 @@ The max depth has been changed to {max_depth}.
 
     def compute_error(self, true, interp):
         """
-        Compute the relative norm error between two arrays
+        Compute the relative norm error between two arrays. If we are doing relative errors and
+        encounter a true value of zero, we use the sum of true and interp in the denominator.
         :param true: (nd array)
         :param interp: (nd array)
         :return: (float) error
@@ -249,15 +256,15 @@ The max depth has been changed to {max_depth}.
         # compute error based on type of error desired
         if self.params.relative_error:
             errors = abs(true - interp) / abs(true)
+            errors[true == 0] = abs(true[true == 0] - interp[true == 0]) / (abs(true[true == 0]) + abs(interp[true == 0]))
         else:
             errors = abs(true - interp)
         if self.error_type == 'L1':
             return np.mean(errors)
         elif self.error_type == "RMSE":
-            return np.sqrt(np.mean(errors**2))
+            return np.sqrt(np.mean(errors ** 2))
         elif self.error_type == "max":
             return max(errors)
-
 
     def _get_leaves(self, node, leaf_list):
         """
