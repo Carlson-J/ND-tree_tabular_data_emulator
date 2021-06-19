@@ -2,7 +2,7 @@
 #undef ND_TREE_EMULATOR_NAME_SETUP
 #undef ND_TREE_EMULATOR_NAME_INTERPOLATE
 #undef ND_TREE_EMULATOR_NAME_FREE
-#define ND_TREE_EMULATOR_TYPE unsigned char, unsigned char, 1, 2, 1, 8
-#define ND_TREE_EMULATOR_NAME_SETUP testing_emulator_setup
-#define ND_TREE_EMULATOR_NAME_INTERPOLATE testing_emulator_interpolate
-#define ND_TREE_EMULATOR_NAME_FREE testing_emulator_free
+#define ND_TREE_EMULATOR_TYPE unsigned char, unsigned char, 2, 1, 12, 50
+#define ND_TREE_EMULATOR_NAME_SETUP non_linear_multi_model_emulator_setup
+#define ND_TREE_EMULATOR_NAME_INTERPOLATE non_linear_multi_model_emulator_interpolate
+#define ND_TREE_EMULATOR_NAME_FREE non_linear_multi_model_emulator_free

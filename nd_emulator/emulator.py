@@ -265,6 +265,7 @@ class EmulatorCpp:
                 ('max_depth', ctypes.c_size_t),
                 ('weight_offset', ctypes.c_size_t),
                 ('model_classes', ctypes.POINTER(ctypes.c_size_t)),
+                ('transforms', ctypes.POINTER(ctypes.c_size_t)),
                 ('model_class_weights', ctypes.POINTER(ctypes.c_size_t)),
                 ('spacing', ctypes.POINTER(ctypes.c_size_t)),
                 ('dx', ctypes.POINTER(ctypes.c_double)),

@@ -96,6 +96,7 @@ private:
     size_t max_depth;
     size_t weight_offset;
     size_t model_classes[num_model_classes];
+    size_t transforms[num_model_classes];
     size_t model_class_weights[num_model_classes];
     size_t spacing[num_dim];
     double dx[num_dim];
@@ -137,6 +138,10 @@ private:
         // -- model classes
         attribute = file.getAttribute("model_classes");
         attribute.template read(model_classes);
+        assert(num_model_classes == attribute.getSpace().getElementCount());
+        // -- transforms
+        attribute = file.getAttribute("transforms");
+        attribute.template read(transforms);
         assert(num_model_classes == attribute.getSpace().getElementCount());
         // -- spacings
         attribute = file.getAttribute("spacing");
@@ -194,12 +199,23 @@ private:
         auto stop = std::end(offsets);
         size_t model_type_index = std::upper_bound(start, stop, index) - start - 1;
         // get model weights
-//        std::vector<double>& weights = model_arrays[model_type_index][index - offsets[model_type_index]];
         double* weights = &model_arrays[model_array_offsets[model_type_index] + (index - offsets[model_type_index])*
                                         model_class_weights[model_type_index]];
         // Choose which interpolation scheme to use
         if (model_classes[model_type_index] == MODEL_CLASS_TYPE_ND_LINEAR){
-            return nd_linear_interp(point, weights);
+            if (transforms[model_type_index] == TRANSFORMS_NONE){
+                return nd_linear_interp(point, weights);
+            } else if (transforms[model_type_index] == TRANSFORMS_LOG){
+                double solution = nd_linear_interp(point, weights+1);
+                solution = pow(10.0, solution);
+                if (weights[0] != 0.0){
+                    solution -= std::fabs(weights[0]);
+                    solution *=  copysign(1.0, weights[0]);
+                }
+                return solution;
+            } else{
+                throw std::exception(); //"Unknown transform"
+            }
         } else{
             throw std::exception(); //"Model class not implemented yet"
         }

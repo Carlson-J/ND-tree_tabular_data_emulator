@@ -59,10 +59,10 @@ if __name__ == "__main__":
     if not os.path.isdir(save_directory):
         os.makedirs(save_directory)
 
-    # # save compact emulator
-    # if not skip_emulator_creation:
-    #     emulator.save(save_directory, emulator_name)
-    #
-    # make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
+    # save compact emulator
+    if not skip_emulator_creation:
+        emulator.save(save_directory, emulator_name)
+
+    make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
     print('done')

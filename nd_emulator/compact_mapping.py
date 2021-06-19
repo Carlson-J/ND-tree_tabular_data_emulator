@@ -7,7 +7,7 @@ from .parameter_struct import Parameters
 # mapping from strings to ints for saving in hdf5 file
 SPACING_TYPES = ['linear', 'log']
 MODEL_CLASS_TYPES = ['nd-linear']
-TRANSFORMS = ['linear', 'log']
+TRANSFORMS = [None, 'log']
 
 
 def type_header_conversion(type):
@@ -28,7 +28,8 @@ def type_header_conversion(type):
         raise ValueError("Unknown type")
 
 
-def save_header_file(folder_path, emulator_name, encoding_type, indexing_type, num_dims, num_model_classes, num_models, model_array_size):
+def save_header_file(folder_path, emulator_name, encoding_type, indexing_type, num_dims, num_model_classes,
+                     num_models, model_array_size):
 
     # create file to hold define constants
     filename = folder_path + '/' + emulator_name
@@ -105,6 +106,7 @@ def save_compact_mapping(compact_mapping, folder_path, emulator_name, return_fil
         file.attrs['spacing'] = [SPACING_TYPES.index(s) for s in compact_mapping.params.spacing]
         file.attrs['error_threshold'] = compact_mapping.params.error_threshold
         file.attrs['model_classes'] = [MODEL_CLASS_TYPES.index(s['type']) for s in compact_mapping.params.model_classes]
+        file.attrs['transforms'] = [TRANSFORMS.index(s['transforms']) for s in compact_mapping.params.model_classes]
         file.attrs['max_test_points'] = compact_mapping.params.max_test_points
         file.attrs['relative_error'] = compact_mapping.params.relative_error
         file.attrs['domain'] = compact_mapping.params.domain
@@ -113,6 +115,7 @@ def save_compact_mapping(compact_mapping, folder_path, emulator_name, return_fil
         file.close()
     if return_file_size:
         return path.getsize(filename)
+
 
 def load_compact_mapping(filename, return_file_size=False):
     """
@@ -141,7 +144,8 @@ def load_compact_mapping(filename, return_file_size=False):
         max_depth = file.attrs['max_depth']
         spacing = [SPACING_TYPES[s] for s in file.attrs['spacing']]
         error_threshold = file.attrs['error_threshold']
-        model_classes = [{'type':MODEL_CLASS_TYPES[s]} for s in file.attrs['model_classes']]
+        model_classes = [{'type': MODEL_CLASS_TYPES[m], 'transforms': TRANSFORMS[t]} for m, t in
+                         zip(file.attrs['model_classes'], file.attrs['transforms'])]
         max_test_points = file.attrs['max_test_points']
         relative_error = file.attrs['relative_error']
         domain = file.attrs['domain']

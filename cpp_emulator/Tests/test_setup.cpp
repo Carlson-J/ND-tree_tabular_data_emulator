@@ -84,7 +84,7 @@ TEST_CASE("Interpolation on non-linear function", "[Interp_4d_non_linear]"){
     const size_t num_points = 5;
     const size_t num_dim = 2;
     double x0[num_points] = {0.0, 0.3, 0.6, 0.4, 1.0};
-    double x1[num_points] = {1.0, 13.1, 19.4, 89.0, 100.0};
+    double x1[num_points] = {0.0, 0.56, 0.64, 0.97, 1.0};
     // Create array of pointers to point to each array
     double* points[num_dim] = {x0, x1};
     // Create array for solution
@@ -93,7 +93,7 @@ TEST_CASE("Interpolation on non-linear function", "[Interp_4d_non_linear]"){
     emulator.interpolate(points, num_points, sol);
     // check if results are correct
     for (size_t i = 0; i < num_points; i++){
-        double sol_true = x0[i] * log10(x1[i]);
+        double sol_true = cos(x0[i])*2 + sin(x1[i]);
         REQUIRE(std::fabs(sol[i] - sol_true) < EPS);
     }
 }
@@ -106,13 +106,13 @@ TEST_CASE("Interpolation on non-linear function in Parallel", "[Interp_2d_non_li
 
     Emulator<ND_TREE_EMULATOR_TYPE> emulator("../../Tests/non_linear2d_table.hdf5");
     const size_t NUM_RUNS = 100;
-    #pragma omp parallel for default(none) shared(emulator, NUM_RUNS, EPS, std::cout)
+    #pragma omp parallel for default(none) shared(emulator, std::cout)
     for (size_t j = 0; j < NUM_RUNS; j++){
         // create 2d data for interpolation
         const size_t num_points = 5;
         const size_t num_dim = 2;
         double x0[num_points] = {0.0, 0.3, 0.6, 0.4, 1.0};
-        double x1[num_points] = {1.0, 13.1, 19.4, 89.0, 100.0};
+        double x1[num_points] = {0.0, 0.56, 0.64, 0.97, 1.0};
         // Create array of pointers to point to each array
         double *points[num_dim] = {x0, x1};
         // Create array for solution
@@ -122,7 +122,7 @@ TEST_CASE("Interpolation on non-linear function in Parallel", "[Interp_2d_non_li
         // check if results are correct
 #pragma omp critical
         for (size_t i = 0; i < num_points; i++) {
-            double sol_true = x0[i] * log10(x1[i]);
+            double sol_true = cos(x0[i])*2 + sin(x1[i]);
             REQUIRE(std::fabs(sol[i] - sol_true) < EPS);
         }
     }
@@ -136,12 +136,12 @@ TEST_CASE("Correct mapping in tree index space", "[Index Mapping]"){
     const size_t num_points = 5;
     const size_t num_dim = 2;
     double x0[num_points] = {0.0, 0.3, 0.6, 0.4, 1.0};
-    double x1[num_points] = {1.0, 13.1, 19.4, 89.0, 100.0};
+    double x1[num_points] = {0.0, 0.56, 0.64, 0.97, 1.0};
     size_t correct_indices[num_points] = {0, 9, 12, 11, 15};
     double point[num_dim];
     for (size_t i = 0; i < num_points; i++){
         point[0] = x0[i];
-        point[1] = log10(x1[i]);
+        point[1] = x1[i];
         size_t sol = emulator.compute_tree_index(point);
         REQUIRE(sol == correct_indices[i]);
     }
