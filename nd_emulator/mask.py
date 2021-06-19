@@ -1,4 +1,8 @@
 import numpy as np
+from numba import jit
+
+DOMAIN_ROUNDING_MAP = [None, 'expand', 'contract']
+SPACING_OPTIONS = ['linear', 'log']
 
 
 def get_mask_dims(mask):
@@ -38,50 +42,59 @@ def create_mask(sub_domain, domain, dims, spacings, domain_rounding_type=None):
     num_dims = len(spacings)
     # get domain intersection
     d_sub = sub_domain.copy()
+    d = domain.copy()
+    index_ranges = np.zeros([num_dims, 2], dtype=int)  # this will be changed
+    index_ranges = get_mask_indices(index_ranges, num_dims, np.array(d_sub), np.array(sub_domain), np.array(domain),
+                                    np.array(d)
+                                    , dims, DOMAIN_ROUNDING_MAP.index(domain_rounding_type), EPS,
+                                    np.array([SPACING_OPTIONS.index(s) for s in spacings]))
+    if index_ranges is None:
+        return None
+    mask = []
+    for i in range(len(index_ranges)):
+        mask.append(slice(index_ranges[i][0], index_ranges[i][1]))
+    mask = tuple(mask)
+    return mask
+
+
+@jit(nopython=True)
+def get_mask_indices(index_ranges, num_dims, d_sub, sub_domain, domain, d, dims, domain_rounding_type, EPS, spacings):
     for i in range(num_dims):
         # only keep intersection range
-        d_sub[i][0] = np.max([sub_domain[i][0], domain[i][0]])
-        d_sub[i][1] = np.min([sub_domain[i][1], domain[i][1]])
+        d_sub[i][0] = max(sub_domain[i][0], domain[i][0])
+        d_sub[i][1] = min(sub_domain[i][1], domain[i][1])
         # return None if there is no intersection
         if d_sub[i][0] >= d_sub[i][1]:
             return None
     # do needed spacings
-    d = domain.copy()
     for i in range(num_dims):
-        if spacings[i] == 'linear':
+        if spacings[i] == 0:
             continue
-        elif spacings[i] == 'log':
-            assert (np.all(np.array(domain[i]) > 0))
+        elif spacings[i] == 1:
+            # assert (np.all(np.array(domain[i]) > 0))
             d[i] = np.log10(domain[i])
             d_sub[i] = np.log10(d_sub[i])
 
     # compute index ranges
-    index_ranges = np.zeros([num_dims, 2], dtype=int)
     for i in range(num_dims):
         dx = (d[i][1] - d[i][0]) / (dims[i] - 1)
         lo_tmp = (d_sub[i][0] - d[i][0]) / dx
         hi_tmp = (d_sub[i][1] - d[i][0]) / dx
-        if domain_rounding_type is None:
+        if domain_rounding_type == 0:
             lo = int(np.around(lo_tmp))
             if abs(lo - lo_tmp) > EPS:
                 raise RuntimeError
             hi = int(np.around(hi_tmp))
             if abs(hi - hi_tmp) > EPS:
                 raise RuntimeError
-        elif domain_rounding_type == 'expand':
+        elif domain_rounding_type == 1:
             lo = int(np.floor(lo_tmp))
             hi = int(np.ceil(hi_tmp))
-        elif domain_rounding_type == 'contract':
+        elif domain_rounding_type == 2:
             lo = int(np.ceil(lo_tmp))
             hi = int(np.floor(hi_tmp))
-        else:
-            raise ValueError(f"Unknown domain_rounding_type: {domain_rounding_type}")
         # return None if one dim is flat
         if hi == lo:
             return None
         index_ranges[i] = [lo, hi + 1]
-    mask = []
-    for i in range(len(index_ranges)):
-        mask.append(slice(index_ranges[i][0], index_ranges[i][1]))
-    mask = tuple(mask)
-    return mask
+    return index_ranges
