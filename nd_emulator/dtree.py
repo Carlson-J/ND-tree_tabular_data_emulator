@@ -237,7 +237,7 @@ The max depth has been changed to {max_depth}.
                 f_true = np.array([self.data['f'][node['mask']][tuple(a)] for a in test_indices])
                 err = self.compute_error(f_true, f_interp)
             else:
-                raise ValueError("Unknown model type: {model_class}")
+                raise ValueError(f"Unknown model type: {model_class}")
             # check if fit is best so far
             if err < current_error:
                 current_error = err
