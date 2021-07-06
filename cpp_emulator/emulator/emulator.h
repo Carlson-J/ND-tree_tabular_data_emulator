@@ -31,6 +31,8 @@ public:
         }
         // compute other derived quantities
         weight_offset = std::pow(2, num_dim);
+        // compute max index
+        max_index = (1<<max_depth) - 1; //size_t(pow(2, max_depth) - 1);
     }
 
     void interpolate(double** points, size_t num_points, double* return_array){
@@ -80,7 +82,7 @@ public:
             cartesian_indices[i] = size_t((p - domain[i * 2 + 0]) / dx[i]);
             // If the index is outside the index domain of the emulator round to the nearest cell.
             cartesian_indices[i] = std::max(size_t(0), cartesian_indices[i]);
-            cartesian_indices[i] = std::min(size_t(pow(2, max_depth) - 1), cartesian_indices[i]);
+            cartesian_indices[i] = std::min(max_index, cartesian_indices[i]);
         }
         // convert to tree index space
         size_t index = 0;
@@ -93,6 +95,7 @@ public:
     }
 
 private:
+    size_t max_index;
     size_t max_depth;
     size_t weight_offset;
     size_t model_classes[num_model_classes];
