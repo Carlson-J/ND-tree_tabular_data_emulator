@@ -60,6 +60,8 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
 
     # build tree
     tree = DTree(tree_parameters, data, error_type=error_type)
+    if return_tree:
+        return tree
 
     # convert to compact storage/mapping scheme
     compact_mapping = convert_tree(tree)
@@ -67,11 +69,7 @@ def build_emulator(data, max_depth, domain, spacing, error_threshold, model_clas
     # create emulator
     emulator = Emulator(compact_mapping)
 
-    if return_tree:
-        return emulator, tree
-    else:
-        return emulator
-
+    return emulator
 
 def load_emulator(filename):
     """
@@ -346,14 +344,17 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
         shell = False
     # -- Put include file that is needed to compile the library for the specific table
     shutil.copy(save_directory + '/' + emulator_name + "_cpp_params.h", cpp_source_dir + '/emulator/table_params.h')
+    # -- Setup env
+    new_env = dict(os.environ)
+    new_env['EMULATOR_NAME'] = emulator_name
     # -- Create build files
     cmakeCmd = ["cmake", '-S', cpp_source_dir, '-B', tmp_dir, '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
-    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell)
+    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell, env=new_env)
     # -- build C++ code
-    cmakeCmd = ["cmake", '--build', tmp_dir, '--target', 'ND_emulator_lib']
-    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell)
+    cmakeCmd = ["cmake", '--build', tmp_dir, '--target', 'ND_emulator_lib', '--verbose']
+    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell,  env=new_env)
     # -- move C++ library to install folder
-    shutil.copy(tmp_dir + '/libND_emulator_lib.so', save_directory + f'/{emulator_name}_lib.so')
+    shutil.copy(tmp_dir + f'/{emulator_name}.so', save_directory + f'/{emulator_name}.so')
 
     # create readme file with the names of the function calls to used with the shared libraries
     with open(save_directory + '/README.md', 'w') as file:

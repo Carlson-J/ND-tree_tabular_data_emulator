@@ -254,11 +254,12 @@ The max depth has been changed to {max_depth}.
         :return: (float) error
         """
         # compute error based on type of error desired
+        errors = abs(true - interp)
+        mask_zero = errors != 0
         if self.params.relative_error:
-            errors = abs(true - interp) / abs(true)
-            errors[true == 0] = abs(true[true == 0] - interp[true == 0]) / (abs(true[true == 0]) + abs(interp[true == 0]))
-        else:
-            errors = abs(true - interp)
+            errors[true != 0 & mask_zero] = abs(true[true != 0 & mask_zero] - interp[true != 0 & mask_zero]) / abs(true[true != 0 & mask_zero])
+            errors[true == 0 & mask_zero] = abs(true[true == 0 & mask_zero] - interp[true == 0 & mask_zero]) / (abs(true[true == 0 & mask_zero]) + abs(interp[true == 0 & mask_zero]))
+            
         if self.error_type == 'L1':
             return np.mean(errors)
         elif self.error_type == "RMSE":
