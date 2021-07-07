@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.16)
 project(profiler)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -24,6 +24,14 @@ add_library(ND_emulator_lib SHARED ./emulator/emulator_externs.cpp ./emulator/em
 #target_link_libraries(ND_emulator_lib HighFive)
 target_link_libraries(ND_emulator_lib PRIVATE morton-nd::MortonND HighFive)
 
+if (DEFINED ENV{EMULATOR_NAME})
+SET(EMULATOR_NAME $ENV{EMULATOR_NAME})
+else (DEFINED ENV{EMULATOR_NAME})
+SET(EMULATOR_NAME "emulator")
+endif (DEFINED ENV{EMULATOR_NAME})
+
+set_target_properties(ND_emulator_lib PROPERTIES PREFIX "")
+set_target_properties(ND_emulator_lib PROPERTIES OUTPUT_NAME "${EMULATOR_NAME}")
 set_target_properties(ND_emulator_lib PROPERTIES LINKER_LANGUAGE CXX)
 #set_target_properties(ND_emulator_lib PROPERTIES PUBLIC_HEADER ./emulator.h)
 
