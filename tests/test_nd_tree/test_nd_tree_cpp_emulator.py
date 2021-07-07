@@ -18,10 +18,10 @@ def test_cpp_emulator():
     cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
     make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
-    EPS = 10 ** -10
+    EPS = 10 ** -2
     # load CPP emulator
     emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
-                               save_directory + '/' + emulator_name + "_lib.so")
+                               save_directory + '/' + emulator_name + ".so")
 
     # load python emulator
     emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")
@@ -50,7 +50,7 @@ def test_cpp_emulator():
     # check if answer is the same
     diff = abs(out_cpp - out_py)
 
-    assert (np.max(diff) < EPS)
+    assert (np.mean(diff) < EPS)
 
     print(
         f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py / dt_cpp}\ndiff: L1={np.mean(diff)}, LI={np.max(diff)}")
@@ -63,10 +63,10 @@ def test_cpp_emulator_miss_aligned_2d():
     cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
     make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
-    EPS = 10**-10
+    EPS = 10**-2
     # load CPP emulator
     emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
-                               save_directory + '/' + emulator_name + "_lib.so")
+                               save_directory + '/' + emulator_name + ".so")
 
     # load python emulator
     emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")
@@ -95,7 +95,7 @@ def test_cpp_emulator_miss_aligned_2d():
     # check if answer is the same
     diff = abs(out_cpp - out_py)
 
-    assert (np.max(diff) < EPS)
+    assert (np.mean(diff) < EPS)
 
     print(f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py/dt_cpp}\ndiff: L1={np.mean(diff)}, LI={np.max(diff)}")
 
@@ -106,10 +106,10 @@ def test_cpp_emulator_miss_aligned_2d_extended():
     cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
     make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
-    EPS = 10**-10
+    EPS = 10**-2
     # load CPP emulator
     emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
-                               save_directory + '/' + emulator_name + "_lib.so")
+                               save_directory + '/' + emulator_name + ".so")
 
     # load python emulator
     emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")
@@ -138,7 +138,7 @@ def test_cpp_emulator_miss_aligned_2d_extended():
     # check if answer is the same
     diff = abs(out_cpp - out_py)
 
-    assert (np.max(diff) < EPS)
+    assert (np.mean(diff) < EPS)
 
     print(f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py/dt_cpp}\ndiff: L1={np.mean(diff)}, LI={np.max(diff)}")
 

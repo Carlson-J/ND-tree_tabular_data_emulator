@@ -12,6 +12,8 @@
 #include <memory>
 #include <algorithm>
 #include <cmath>
+#include <morton-nd/mortonND_BMI2.h>
+#include <morton-nd/mortonND_LUT.h>
 
 template <typename encoding_int, typename indexing_int, size_t num_model_classes, size_t num_dim, size_t num_models,
         size_t model_array_size>
@@ -20,7 +22,7 @@ public:
     Emulator(std::string filename){
         std::cout << "Loading emulator" << std::endl;
         load_emulator(filename);
-        // do domain tranform
+        // do domain transform
         for (size_t i = 0; i < num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
             domain_transform(&index_domain[i*2], i, 2);
@@ -30,9 +32,15 @@ public:
             dx[i] = (index_domain[i*2 + 1] - index_domain[i*2 + 0]) / (pow(2, max_depth));
         }
         // compute other derived quantities
-        weight_offset = std::pow(2, num_dim);
+        weight_offset = 1<<num_dim; //std::pow(2, num_dim);
         // compute max index
         max_index = (1<<max_depth) - 1; //size_t(pow(2, max_depth) - 1);
+        // Set current cell to the first cell, morton index 0, by giving the lower part of the domain
+        double starting_cell[num_dim];
+        for (size_t i = 0; i < num_dim; i++){
+            starting_cell[i] = domain[i*2];
+        }
+        update_current_cell(starting_cell);
     }
 
     void interpolate(double** points, size_t num_points, double* return_array){
@@ -58,17 +66,19 @@ public:
          */
         // Determine which model (i.e. interpolator) each point will use.
         for (size_t i = 0; i < num_points; i++){
-            double point_domain[num_dim] = {0};
-            double point[num_dim] = {0};
+            double point_domain[num_dim];
+            double point[num_dim];
             for (size_t j = 0; j < num_dim; j++){
                 point_domain[j] = points[j][i];
                 point[j] = points[j][i];
                 // Do any needed domain transforms
                 domain_transform(&point_domain[j], j, 1);
             }
-            auto model_index = get_model_index(point_domain);
-            // Do interpolation
-            return_array[i] = interp_point(point, model_index);
+            // Check if we are already in correct cell.
+            if (!point_in_current_cell(point_domain)){
+                update_current_cell(point_domain);
+            }
+            return_array[i] = interp_point(point);
         }
     }
 
@@ -84,6 +94,7 @@ public:
             cartesian_indices[i] = std::max(size_t(0), cartesian_indices[i]);
             cartesian_indices[i] = std::min(max_index, cartesian_indices[i]);
         }
+        // TODO: change this to use nd-morton
         // convert to tree index space
         size_t index = 0;
         for (size_t i = 0; i < max_depth; i++){
@@ -110,6 +121,32 @@ private:
     encoding_int encoding_array[num_models];
     indexing_int indexing_array[num_models];
     double model_arrays[model_array_size];
+    double* current_cell_domain;
+    double* current_weights;
+    size_t current_model_type_index;
+
+    void update_current_cell(double* point_domain){
+        // Get model index
+        auto model_index = get_model_index(point_domain);
+        // save current model class
+        auto start = std::begin(offsets);
+        auto stop = std::end(offsets);
+        current_model_type_index = std::upper_bound(start, stop, model_index) - start - 1;
+        // save current weights
+        current_weights = get_weights(model_index);
+        current_cell_domain = compute_cell_domain(current_weights);
+    }
+
+    bool point_in_current_cell(double* point_domain){
+        // determine if point is in current domain.
+        for (size_t i = 0; i<num_dim; i++){
+            if ((point_domain[i] < current_cell_domain[i])
+                || (point_domain[i] > current_cell_domain[i+num_dim])){
+                return false;
+            }
+        }
+        return true;
+    }
 
     void domain_transform(double* dim_array, size_t dim, size_t num_vars){
         if (spacing[dim] == 0){
@@ -196,24 +233,30 @@ private:
     }
 
 
-    double interp_point(const double* point, const size_t index){
-        // Determine which model array to use
-        auto start = std::begin(offsets);
-        auto stop = std::end(offsets);
-        size_t model_type_index = std::upper_bound(start, stop, index) - start - 1;
+    double* get_weights(const size_t index){
         // get model weights
-        double* weights = &model_arrays[model_array_offsets[model_type_index] + (index - offsets[model_type_index])*
-                                        model_class_weights[model_type_index]];
+        return &model_arrays[model_array_offsets[current_model_type_index]
+                                + (index - offsets[current_model_type_index])
+                                *model_class_weights[current_model_type_index]];
+    }
+
+    double* compute_cell_domain(double* weights){
+        // return pointer to the domain
+        return &weights[weight_offset];
+    }
+
+
+    double interp_point(const double* point){;
         // Choose which interpolation scheme to use
-        if (model_classes[model_type_index] == MODEL_CLASS_TYPE_ND_LINEAR){
-            if (transforms[model_type_index] == TRANSFORMS_NONE){
-                return nd_linear_interp(point, weights);
-            } else if (transforms[model_type_index] == TRANSFORMS_LOG){
-                double solution = nd_linear_interp(point, weights+1);
+        if (model_classes[current_model_type_index] == MODEL_CLASS_TYPE_ND_LINEAR){
+            if (transforms[current_model_type_index] == TRANSFORMS_NONE){
+                return nd_linear_interp(point, current_weights);
+            } else if (transforms[current_model_type_index] == TRANSFORMS_LOG){
+                double solution = nd_linear_interp(point, current_weights+1);
                 solution = pow(10.0, solution);
-                if (weights[0] != 0.0){
-                    solution -= std::fabs(weights[0]);
-                    solution *=  copysign(1.0, weights[0]);
+                if (current_weights[0] != 0.0){
+                    solution -= std::fabs(current_weights[0]);
+                    solution *=  copysign(1.0, current_weights[0]);
                 }
                 return solution;
             } else{

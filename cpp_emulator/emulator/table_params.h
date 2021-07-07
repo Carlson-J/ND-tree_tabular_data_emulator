@@ -2,7 +2,7 @@
 #undef ND_TREE_EMULATOR_NAME_SETUP
 #undef ND_TREE_EMULATOR_NAME_INTERPOLATE
 #undef ND_TREE_EMULATOR_NAME_FREE
-#define ND_TREE_EMULATOR_TYPE unsigned long, unsigned long, 1, 3, 8388608, 117440512
-#define ND_TREE_EMULATOR_NAME_SETUP test1_emulator_setup
-#define ND_TREE_EMULATOR_NAME_INTERPOLATE test1_emulator_interpolate
-#define ND_TREE_EMULATOR_NAME_FREE test1_emulator_free
+#define ND_TREE_EMULATOR_TYPE unsigned short, unsigned char, 1, 2, 12, 96
+#define ND_TREE_EMULATOR_NAME_SETUP miss_aligned_2d_extended_emulator_setup
+#define ND_TREE_EMULATOR_NAME_INTERPOLATE miss_aligned_2d_extended_emulator_interpolate
+#define ND_TREE_EMULATOR_NAME_FREE miss_aligned_2d_extended_emulator_free
