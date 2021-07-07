@@ -2,5 +2,5 @@
 	path = cpp_emulator/HighFive
 	url = https://github.com/BlueBrain/HighFive.git
 [submodule "morton-nd"]
-	path = morton-nd
+	path = cpp_emulator/morton-nd
 	url = https://github.com/kevinhartman/morton-nd.git
