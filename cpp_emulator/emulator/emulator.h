@@ -6,7 +6,7 @@
 #define CPP_EMULATOR_EMULATOR_H
 
 #include <highfive/H5File.hpp>
-#include "string"
+#include <string>
 #include "H5Cpp.h"
 #include "constants.h"
 #include <memory>
@@ -14,6 +14,8 @@
 #include <cmath>
 #include <morton-nd/mortonND_BMI2.h>
 #include <morton-nd/mortonND_LUT.h>
+
+using MortonND = mortonnd::MortonND;
 
 template <typename encoding_int, typename indexing_int, size_t num_model_classes, size_t num_dim, size_t num_models,
         size_t model_array_size>

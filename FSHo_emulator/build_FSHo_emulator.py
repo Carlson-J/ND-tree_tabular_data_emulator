@@ -50,7 +50,7 @@ if __name__ == "__main__":
     num_vars = len(vars.keys())
     errors = np.logspace(-10, -1, N)[::-1]
     sizes = np.zeros([N, num_vars])
-    for i in range(N):
+    for i in range(1):
         for j, key in enumerate(vars.keys()):
             # Name of emulator. This will be used to construct the name used when calling the compiled version and
             # -- and determining the filenames of the various saved files.
@@ -81,9 +81,10 @@ if __name__ == "__main__":
                 os.makedirs(save_directory)
 
             # save compact emulator
-            sizes[i, j] = emulator.save(save_directory, emulator_name, return_file_size=True)
+            # sizes[i, j] = emulator.save(save_directory, emulator_name, return_file_size=True)
             #
             # make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
+            break
 
     for i in range(num_vars):
         plt.plot(sizes[:, i], errors)

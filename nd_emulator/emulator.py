@@ -273,6 +273,9 @@ class EmulatorCpp:
                 ('encoding_array', ctypes.POINTER(encoding_type)),
                 ('indexing_array', ctypes.POINTER(indexing_type)),
                 ('model_arrays', ctypes.POINTER(ctypes.c_double)),
+                ('current_cell_domain', ctypes.POINTER(ctypes.c_double)),
+                ('current_weights', ctypes.POINTER(ctypes.c_double)),
+                ('current_model_type_index', ctypes.c_size_t),
             ]
 
         # Load C++ emulator
