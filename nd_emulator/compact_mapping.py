@@ -30,7 +30,6 @@ def type_header_conversion(type):
 
 def save_header_file(folder_path, emulator_name, encoding_type, indexing_type, num_dims, num_model_classes,
                      num_models, model_array_size):
-
     # create file to hold define constants
     filename = folder_path + '/' + emulator_name
     if filename[-3:] == '.h5':
@@ -151,7 +150,7 @@ def load_compact_mapping(filename, return_file_size=False):
         domain = file.attrs['domain']
         index_domain = file.attrs['index_domain']
         expand_index_domain = file.attrs['expand_index_domain']
-        params = Parameters(max_depth, np.array(spacing), np.array([2**max_depth for i in range(len(spacing))]),
+        params = Parameters(max_depth, np.array(spacing), np.array([2 ** max_depth for i in range(len(spacing))]),
                             error_threshold, np.array(model_classes), max_test_points, relative_error, np.array(domain),
                             np.array(index_domain), expand_index_domain)
         file.close()
@@ -223,9 +222,7 @@ def compute_encoding_index(leaf, params):
 @dataclass
 class CompactMapping:
     encoding_array: np.array
-    index_array: np.array
-    offsets: np.array
-    model_arrays: list
+    point_map: dict
     params: Parameters
 
 
@@ -251,39 +248,78 @@ def convert_tree(tree):
     # compute leaf nodes
     leaves = tree.get_leaves()
     params = tree.get_params()
+
+    # change dims if max depth was not achieved
+    depth_diff = tree.params.max_depth - tree.achieved_depth
+    assert(np.all((tree.params.dims-1) % 2 == 0))
+    dims = (tree.params.dims-1)/2 + 1
+    # TODO: change it so that the dims are the dims of the cells of the most resolved grid achieved that are in the domain
+
+
+    # create encoding array
+    encoding_array = np.chararray(dims - 1)
+    encoding_array[...] = 0
+
     # Create model arrays
-    model_arrays = []
     model_classes_str = []
     for model_class in tree.params.model_classes:
-        model_arrays.append([])
         model_classes_str.append(convert_model_class_to_string(model_class))
 
+    # fill arrays
+    point_map = {}
     for leaf in leaves:
         if leaf['model']['type'] is not None:
             model_string = convert_model_class_to_string(leaf['model']['type'])
-            model_arrays[list(model_classes_str).index(model_string)].append(leaf['model']['weights'])
-
-    # create encoding array
-    encoding_array = []
-    index_array = []
-    counters = np.zeros([len(model_arrays)], dtype=int)
-    offsets = [0] + [len(model_arrays[i]) for i in range(len(model_arrays) - 1)]
-    for i in range(len(leaves)):
-        # compute encoding array index
-        if leaves[i]['model']['type'] is None:
-            continue
-        encoding_array.append(compute_encoding_index(leaves[i], params))
-        # compute index-array index
-        # # determine model type index
-        type_index = list(model_classes_str).index(convert_model_class_to_string(leaves[i]['model']['type']))
-        index_array.append(counters[type_index] + offsets[type_index])
-        counters[type_index] += 1
-
-    # convert lists of np arrays
-    encoding_array = np.array(encoding_array, dtype=int)
-    index_array = np.array(index_array, dtype=int)
-    for i in range(len(model_arrays)):
-        model_arrays[i] = np.array(model_arrays[i])
+            # offset mask by one and adjust step for max depth
+            mask = list(leaf['mask'])
+            for i in range(len(mask)):
+                mask[i] = slice(mask[i].start, mask[i].stop - 1, 2 ** depth_diff)
+            mask = tuple(mask)
+            # save cartesian index of all points and their values is separate arrays
+            for i in range(2 ** tree.num_dims):
+                cart_indices = np.zeros(tree.num_dims, dtype=np.int)
+                for j, s in enumerate(f'{i:0{tree.num_dims}b}'[::-1]):
+                    if s == '0':
+                        assert (mask[j].start % mask[j].step == 0)
+                        cart_indices[j] = mask[j].start / mask[j].step
+                    elif s == '1':
+                        assert (mask[j].stop % mask[j].step == 0)
+                        cart_indices[j] = mask[j].stop / mask[j].step
+                    else:
+                        raise ValueError
+                global_index = compute_global_index(cart_indices, tree.params.dims)
+                point_map[f'{global_index}'] = tree.data['f'][tuple(cart_indices)]
+            # determine byte for given size and type
+            c = (list(model_classes_str).index(model_string) << 4) | len(leaf['id'])
+            encoding_array[mask] = bytes([c])
+            # to decode use depth = c & 0b00001111, type = c >> 4
 
     # save in data object and return
-    return CompactMapping(encoding_array, index_array, offsets, model_arrays, params)
+    return CompactMapping(encoding_array.flatten(), point_map, params)
+
+
+def compute_global_index(cart_indices, dims):
+    """
+    Compute the global index given the dims and nd-index
+    :param cart_indices: list of coordinates
+    :param dims: shape of global array
+    :return:
+    """
+    tmp = cart_indices.copy()
+    for j in range(1, len(dims)):
+        tmp[:-j] *= dims[-j]
+    return sum(tmp)
+
+
+def unpack_global_index(global_index, dims):
+    """
+    Compute the cartesian index based on the global one
+    :param global_index: (uint)
+    :param dims: list (uint)
+    :return:
+    """
+    cart_indices = np.zeros_like(dims)
+    cart_indices[-1] = global_index % dims[-1]
+    for i in range(1, len(dims)):
+        cart_indices[i] = (global_index // np.prod(dims[-i:])) % dims[-i]
+    return cart_indices

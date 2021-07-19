@@ -30,6 +30,10 @@ class DTree:
         self.num_dims = len(self.params.dims)
         self.error_type = error_type
 
+        # make char array for mapping depth and model type.
+        self.mapping_array = np.chararray(np.array(self.params.dims) - 1)     # remove 1 for the offset point
+        self.mapping_array[...] = chr(0b0)
+
         # determine the index domain. If we are not expanding it to fit, determine the domain rounding scheme
         self.domain_rounding_type = None
         if self.params.expand_index_domain:
