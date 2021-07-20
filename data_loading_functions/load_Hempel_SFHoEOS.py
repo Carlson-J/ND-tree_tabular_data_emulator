@@ -2,7 +2,7 @@ import h5py
 import numpy as np
 
 
-def load_SFHo_EOS(filepath):
+def load_SFHo_EOS(filepath, vars_to_load=None):
     """
     Loads the Hempel_SFHoEOS EOS from a hdf5 file. The ranges are saved as [ye, log(T), log(rho)]
     :param filepath: (str)
@@ -32,8 +32,12 @@ def load_SFHo_EOS(filepath):
 
         # load data
         data = {}
-        for key in f_vars:
-            data[key] = {'f': file[key][...]}
+        if vars_to_load is None:
+            for key in f_vars:
+                data[key] = {'f': file[key][...]}
+        else:
+            for key in vars_to_load:
+                data[key] = {'f': file[key][...]}
     return data, domain
 
 
