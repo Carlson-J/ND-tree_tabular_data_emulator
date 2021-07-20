@@ -146,7 +146,7 @@ class Emulator:
         # compute cartesian index
         cart_indices = self.compute_cartesian_index(point)
         # determine model type and location
-        global_index = compute_global_index(cart_indices, self.params.dims)
+        global_index = compute_global_index(cart_indices, self.params.dims - 1)  # the cells are 1 smaller in each dim
         depth, model_type = self.unpack_encoding(global_index)
         # compute owning cell's index
         depth_diff = np.zeros(self.num_dims, dtype=int)
@@ -163,12 +163,23 @@ class Emulator:
                 point_coords[j] += 2**depth_diff[j] * int(d)
             # add domain coords
             if i == 0:
-                weights[-2*self.num_dims:-self.num_dims] = point_coords[:]
+                weights[-2*self.num_dims:-self.num_dims] = self.compute_domain_from_indices(point_coords)
             elif i == 2 ** self.num_dims - 1:
-                weights[-self.num_dims:] = point_coords[:]
+                weights[-self.num_dims:] = self.compute_domain_from_indices(point_coords)
             global_index = compute_global_index(point_coords, self.params.dims)
             weights[i] = self.point_map[f'{global_index}']
         return weights, model_type
+
+    def compute_domain_from_indices(self, point_coords):
+        """
+        Compute (x0,x1,..,xN) based on the index
+        :param point_coords:
+        :return:
+        """
+        output = np.zeros(self.num_dims)
+        for i in range(self.num_dims):
+            output[i] = self.domain[i][0] + self.dx[i]*point_coords[i]
+        return output
 
     def compute_cartesian_index(self, point):
         """

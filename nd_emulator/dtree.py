@@ -36,6 +36,10 @@ class DTree:
 
         # determine the index domain. If we are not expanding it to fit, determine the domain rounding scheme
         self.domain_rounding_type = None
+        # compute the largest possible depth
+        largest_dim = np.max(self.params.dims)
+        self.max_index_depth = int(np.ceil(np.log2(largest_dim - 1)))
+        # setup index domain or rounding type if needed
         if self.params.expand_index_domain:
             self.index_domain, self.index_dims = self.compute_index_domain()
         else:
@@ -77,9 +81,7 @@ class DTree:
         be saved do to optimization when saving the compact mapping.
         :return:
         """
-        largest_dim = np.max(self.params.dims)
-        # expand to be (2^k) + 1
-        new_dim_size = 2 ** int(np.ceil(np.log2(largest_dim - 1))) + 1
+        new_dim_size = 2 ** self.max_index_depth + 1
         # transform domain
         domain = transform_domain(self.params.domain, self.domain_spacings)
         index_domain = domain.copy()

@@ -250,14 +250,12 @@ def convert_tree(tree):
     params = tree.get_params()
 
     # change dims if max depth was not achieved
-    depth_diff = tree.params.max_depth - tree.achieved_depth
-    assert(np.all((tree.params.dims-1) % 2 == 0))
-    dims = (tree.params.dims-1)/2 + 1
-    # TODO: change it so that the dims are the dims of the cells of the most resolved grid achieved that are in the domain
-
+    depth_diff = tree.max_index_depth - tree.achieved_depth
+    dims_cells = np.array([np.ceil((dim-1)/float(2**depth_diff)) for dim in tree.params.dims], dtype=np.uint)
+    dims_points = dims_cells + 1
 
     # create encoding array
-    encoding_array = np.chararray(dims - 1)
+    encoding_array = np.chararray(dims_cells)
     encoding_array[...] = 0
 
     # Create model arrays
@@ -272,30 +270,44 @@ def convert_tree(tree):
             model_string = convert_model_class_to_string(leaf['model']['type'])
             # offset mask by one and adjust step for max depth
             mask = list(leaf['mask'])
+            encoding_mask = []
             for i in range(len(mask)):
                 mask[i] = slice(mask[i].start, mask[i].stop - 1, 2 ** depth_diff)
+                encoding_mask.append(slice(int(np.ceil(mask[i].start/2 ** depth_diff)),
+                                           int(np.ceil(mask[i].stop/2 ** depth_diff))))
             mask = tuple(mask)
+            encoding_mask = tuple(encoding_mask)
             # save cartesian index of all points and their values is separate arrays
             for i in range(2 ** tree.num_dims):
                 cart_indices = np.zeros(tree.num_dims, dtype=np.int)
+                data_indices = np.zeros(tree.num_dims, dtype=np.int)
                 for j, s in enumerate(f'{i:0{tree.num_dims}b}'[::-1]):
                     if s == '0':
-                        assert (mask[j].start % mask[j].step == 0)
+                        # assert (mask[j].start % mask[j].step == 0)
                         cart_indices[j] = mask[j].start / mask[j].step
+                        data_indices[j] = mask[j].start
                     elif s == '1':
-                        assert (mask[j].stop % mask[j].step == 0)
-                        cart_indices[j] = mask[j].stop / mask[j].step
+                        # assert (mask[j].stop % mask[j].step == 0)
+                        cart_indices[j] = max(mask[j].stop / mask[j].step, 1)
+                        data_indices[j] = mask[j].stop
                     else:
                         raise ValueError
-                global_index = compute_global_index(cart_indices, tree.params.dims)
-                point_map[f'{global_index}'] = tree.data['f'][tuple(cart_indices)]
+                global_index = compute_global_index(cart_indices, dims_points)
+                if f'{global_index}' in point_map:
+                    assert(point_map[f'{global_index}'] == tree.data['f'][tuple(data_indices)])
+                else:
+                    point_map[f'{global_index}'] = tree.data['f'][tuple(data_indices)]
             # determine byte for given size and type
             c = (list(model_classes_str).index(model_string) << 4) | len(leaf['id'])
-            encoding_array[mask] = bytes([c])
-            # to decode use depth = c & 0b00001111, type = c >> 4
+            encoding_array[encoding_mask] = bytes([c])
+            # to decode use depth = ord(c) & 0b00001111; type = ord(c) >> 4
+    # change params to reflect the new index space
+    new_params = Parameters(params.max_depth, params.spacing, dims_points, params.error_threshold,
+                            params.model_classes, params.max_test_points, params.relative_error,
+                            params.domain, params.index_domain, params.expand_index_domain)
 
     # save in data object and return
-    return CompactMapping(encoding_array.flatten(), point_map, params)
+    return CompactMapping(encoding_array.flatten(), point_map, new_params)
 
 
 def compute_global_index(cart_indices, dims):
