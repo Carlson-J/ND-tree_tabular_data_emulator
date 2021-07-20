@@ -1,15 +1,16 @@
 import h5py
 import numpy as np
 
-def load_SRO_EOS(filepath):
+def load_SRO_EOS(filepath, vars_to_load=None):
     """
     Loads the SRO EOS from a hdf5 file. The ranges are saved as [ye, log(T), log(rho)]
     :param filepath: (str)
+    :param vars_to_load: None or list(stings) If None all are loaded. If a list of string, each var in the list is loaded
     :return: [list of dictionaries, domain]
     """
     EPS = 10 ** -12
     f_vars = [
-        "Abar", "Xa", "Xh", "Xl", "Xn", "Xp", "Zbar", "Zlbar", "cs2", 
+        "Abar", "Albar", "Xa", "Xh", "Xl", "Xn", "Xp", "Zbar", "Zlbar", "cs2", 
         "dedt", "dpderho", "dpdrhoe", "entropy", "gamma", "logenergy", 
         "logpress", "meffn", "meffp", "mu_e", "mu_n", "mu_p", "muhat", 
         "munu", "r", "u"]
@@ -33,8 +34,12 @@ def load_SRO_EOS(filepath):
 
         # load data
         data = {}
-        for key in f_vars:
-            data[key] = {'f': file[key][...]}
+        if vars_to_load is None:
+            for key in f_vars:
+                data[key] = {'f': file[key][...]}
+        else:
+            for key in vars_to_load:
+                data[key] = {'f': file[key][...]}
     return data, domain
 
 

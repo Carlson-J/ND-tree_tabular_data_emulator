@@ -1,6 +1,7 @@
 import os
 from data_loading_functions.load_test_data import load_test_data
 from nd_emulator import build_emulator, make_cpp_emulator
+from data_loading_functions.load_SRO import load_SRO_EOS
 import subprocess
 import sys
 import shutil
@@ -14,28 +15,24 @@ Save directory:
 if __name__ == "__main__":
     # ------- Edit the details here ------- #
     # If the emulator has already been made, but you want to regenerate the C++ library set to True
-    skip_emulator_creation = False
+    skip_emulator_creation = True
     # Directory where the emulator should be saved. Will be created if it does note exist.
-    save_directory = "./test_v2"
+    save_directory = "./profiling_v2"
     cpp_source_dir = './cpp_emulator'
     # Name of emulator. This will be used to construct the name used when calling the compiled version and
     # -- and determining the filenames of the various saved files.
     # -- It should not contain spaces, nasty special characters or a file extension
-    emulator_name = "testing_v2"
+    emulator_name = "test_v2"
 
     if not skip_emulator_creation:
-        # Specify domain and number of points in each dimension
-        # -- Note that the number of points should equal 2^a-1 for some integer a for best performance
-        # -- the spacing should be how the points are spaced. They must be evenly spaced, but
-        # -- that spacing can be in linear or log space.
-        domain = [[0, 1], [2, 3]]
-        dims = [2**7+1, 2**6+1]
-        spacing = ['linear', 'linear']
 
         # Load function data
         # -- You should create your own function to load your data and put it in the data_loading_functions folder
         # -- where you can call it from.
-        data = load_test_data(dims, domain)
+        filepath = "../tables/SRO_training_rho1025_temp513_ye129_gitM6eba730_20210624.h5"
+        data_raw, domain = load_SRO_EOS(filepath)
+        data = data_raw['Abar']
+        spacing = ['linear', 'linear', 'linear']
 
         # Specify model types
         # -- add each model type to the list in the format of a dict {'type': name, ...}
@@ -45,14 +42,15 @@ if __name__ == "__main__":
         # -- Make sure the depth of the tree is not so deep that there is not enough data
         # -- for example. If the smallest values in dims is 2**3+1, then the max depth you
         # -- can choose is 3.
-        max_depth = 8
-        error_threshold = -1
-        max_test_points = 100       # The max number of points to eval in a cell when estimating the error
+        max_depth = 9
+        error_threshold = -1.0 
+        max_test_points = 1       # The max number of points to eval in a cell when estimating the error
         relative_error = False      # Whether or not the error threshold is absolute or relative error
 
         # create the emulator (should not need to modify this)
         emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes,
-                                  max_test_points=max_test_points, relative_error=relative_error, expand_index_domain=True)
+                                  max_test_points=max_test_points, relative_error=relative_error,
+                                  expand_index_domain=True)
 
     # ------- No not edit below here ------- #
     # create folder to save files in

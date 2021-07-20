@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     # Specify model types
     # -- add each model type to the list in the format of a dict {'type': name, ...}
-    model_classes = [{'type': 'nd-linear'}]
+    model_classes = [{'type': 'nd-linear'},  {'type': 'nd-linear', 'transforms':'log'}]
     error_type = 'RMSE'
 
     # set tree parameters
@@ -70,11 +70,18 @@ if __name__ == "__main__":
 
     # get non-virtual leaf nodes
     E = []
+    num_log_models = 0
+    num_linear_models = 0
     for leaf in leaves:
         if leaf['error'] is not None:
             E.append(leaf['error'])
+            if leaf['model']['type']['transforms'] is None:
+                num_linear_models += 1
+            else:
+                num_log_models += 1
     errors_1 = np.array(E)
-    np.save(f'./error_data/errors_{key}', errors_1)
+    np.save(f'./error_data_log_model_class/errors_{key}', errors_1)
+    print(f'{key}_linear:{num_linear_models}_log{num_log_models}')
     # # save errors at each level
     # for i in range(len(E)):
     #     current_node = tree.root
