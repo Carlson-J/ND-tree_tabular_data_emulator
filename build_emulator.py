@@ -16,12 +16,12 @@ if __name__ == "__main__":
     # If the emulator has already been made, but you want to regenerate the C++ library set to True
     skip_emulator_creation = False
     # Directory where the emulator should be saved. Will be created if it does note exist.
-    save_directory = "./test"
+    save_directory = "./test_v2"
     cpp_source_dir = './cpp_emulator'
     # Name of emulator. This will be used to construct the name used when calling the compiled version and
     # -- and determining the filenames of the various saved files.
     # -- It should not contain spaces, nasty special characters or a file extension
-    emulator_name = "testing"
+    emulator_name = "testing_v2"
 
     if not skip_emulator_creation:
         # Specify domain and number of points in each dimension
@@ -29,7 +29,7 @@ if __name__ == "__main__":
         # -- the spacing should be how the points are spaced. They must be evenly spaced, but
         # -- that spacing can be in linear or log space.
         domain = [[0, 1], [2, 3]]
-        dims = [2**3+1, 2**4+1]
+        dims = [2**7+1, 2**6+1]
         spacing = ['linear', 'linear']
 
         # Load function data
@@ -45,14 +45,14 @@ if __name__ == "__main__":
         # -- Make sure the depth of the tree is not so deep that there is not enough data
         # -- for example. If the smallest values in dims is 2**3+1, then the max depth you
         # -- can choose is 3.
-        max_depth = 3
-        error_threshold = 1e-2
+        max_depth = 8
+        error_threshold = -1
         max_test_points = 100       # The max number of points to eval in a cell when estimating the error
         relative_error = False      # Whether or not the error threshold is absolute or relative error
 
         # create the emulator (should not need to modify this)
         emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes,
-                                  max_test_points=max_test_points, relative_error=relative_error)
+                                  max_test_points=max_test_points, relative_error=relative_error, expand_index_domain=True)
 
     # ------- No not edit below here ------- #
     # create folder to save files in
@@ -63,6 +63,6 @@ if __name__ == "__main__":
     if not skip_emulator_creation:
         emulator.save(save_directory, emulator_name)
 
-    make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
+    # make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
     print('done')

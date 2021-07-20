@@ -15,7 +15,7 @@ import h5py
 
 
 def build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, max_test_points=100,
-                   relative_error=False, expand_index_domain=False, return_tree=False, error_type='max'):
+                   relative_error=False, expand_index_domain=True, return_tree=False, error_type='max'):
     """
     Creates an emulator using ND-tree decomposition over the given domain. The refinement of the tree is carried out
     until a specified error threshold is reached.
