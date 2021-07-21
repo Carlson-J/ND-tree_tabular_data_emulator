@@ -32,7 +32,7 @@ public:
         }
         // compute dx
         for (size_t i = 0; i < num_dim; i++){
-            dx[i] = (index_domain[i*2 + 1] - index_domain[i*2 + 0]) / (pow(2, max_depth));
+            dx[i] = (index_domain[i*2 + 1] - index_domain[i*2 + 0]) / (double)(1 << max_depth);
         }
         // compute other derived quantities
         weight_offset = 1<<num_dim; //std::pow(2, num_dim);
@@ -140,11 +140,11 @@ private:
     double index_domain[num_dim * 2];
 //    size_t offsets[num_model_classes];
 //    size_t model_array_offsets[num_model_classes];
-    char encoding_array[mapping_array_size];
-    double node_values[encoding_array_size];
+    char encoding_array[encoding_array_size];
+    double node_values[mapping_array_size];
 //    double model_arrays[model_array_size];
     double* current_cell_domain;
-    double* current_weights;
+    double current_weights[50];
     size_t current_model_type_index;
     /* Declare the PTHash function. */
     typedef pthash::single_phf<pthash::murmurhash2_64,         // base hasher
@@ -210,8 +210,8 @@ private:
             }
             // compute global index
             double global_index = 0;
-            for (int i = 0; i < num_dim; ++i) {
-                global_index += corner_index[i]*(index_transform_weights[i]);
+            for (int j = 0; j < num_dim; ++j) {
+                global_index += corner_index[j]*(index_transform_weights[j]);
             }
             // Compute hash and load value
             current_weights[i] = node_values[mphf(global_index)];

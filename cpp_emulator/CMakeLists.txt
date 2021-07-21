@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -Wall -Wextra -fopenmp -march=native")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -Wall -Wextra -fopenmp -march=native -std=c++17")
 
 project(build_mapping)
 add_executable(make_mapping PMHF_mapping/build_mapping.cpp)
@@ -25,10 +25,10 @@ add_subdirectory(Tests)
 
 # Create library for emulator
 project(ND_emulator_lib DESCRIPTION "library for using the ND tree emulator")
-add_subdirectory(pthash)
+# add_subdirectory(pthash)
 add_library(ND_emulator_lib SHARED ./emulator/emulator_externs.cpp ./emulator/emulator.h)
 #target_link_libraries(ND_emulator_lib HighFive)
-target_link_libraries(ND_emulator_lib PRIVATE morton-nd::MortonND HighFive pthash)
+target_link_libraries(ND_emulator_lib PRIVATE morton-nd::MortonND HighFive)
 
 if (DEFINED ENV{EMULATOR_NAME})
 SET(EMULATOR_NAME $ENV{EMULATOR_NAME})
