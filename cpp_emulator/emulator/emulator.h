@@ -22,17 +22,16 @@ template <typename indexing_int, size_t num_model_classes, size_t num_dim,
         size_t mapping_array_size, size_t encoding_array_size>
 class Emulator {
 public:
-    Emulator(std::string filename, std::string mphf_location="./pthash.bin"){
-        std::cout << "Loading emulator" << std::endl;
+    Emulator(std::string filename, std::string mphf_location = "./pthash.bin"){
         load_emulator(filename);
         // do domain transform
-        for (size_t i = 0; i < num_dim; i++){
+        for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
             domain_transform(&index_domain[i*2], i, 2);
         }
         // compute dx
-        for (size_t i = 0; i < num_dim; i++){
-            dx[i] = (index_domain[i*2 + 1] - index_domain[i*2 + 0]) / (pow(2, max_depth));
+        for (size_t i = 0; i != num_dim; i++){
+            dx[i] = (index_domain[i*2 + 1] - index_domain[i*2 + 0]) / (double)(1 << max_depth);
         }
         // compute other derived quantities
         weight_offset = 1<<num_dim; //std::pow(2, num_dim);
@@ -40,11 +39,11 @@ public:
         // compute max index
         max_index = (1<<max_depth) - 1; //size_t(pow(2, max_depth) - 1);
         // Compute weights for transforming cartesian into 1d dim
-        for (int i = 0; i < num_dim; ++i) {
+        for (size_t i = 0; i != num_dim; ++i) {
             index_transform_weights[i] = 1;
         }
-        for (int i = num_dim-2; i >= 0; --i) {
-            for (int j = i; j >= 0; --j) {
+        for (int i = num_dim-2; i >= 0; i--) {
+            for (int j = i; j >= 0; j--) {
                 index_transform_weights[j] *= dims[i];
             }
         }
@@ -52,7 +51,7 @@ public:
         mphf = load_mphf(mphf_location);
         // Set current cell to the first cell, morton index 0, by giving the lower part of the domain
         double starting_cell[num_dim];
-        for (size_t i = 0; i < num_dim; i++){
+        for (size_t i = 0; i != num_dim; i++){
             starting_cell[i] = domain[i*2];
         }
         update_current_cell(starting_cell);
@@ -80,10 +79,10 @@ public:
          * input space to each cell is included in the offline emulator.
          */
         // Determine which model (i.e. interpolator) each point will use.
-        for (size_t i = 0; i < num_points; i++){
+        for (size_t i = 0; i != num_points; i++){
             double point_domain[num_dim];
             double point[num_dim];
-            for (size_t j = 0; j < num_dim; j++){
+            for (size_t j = 0; j != num_dim; j++){
                 point_domain[j] = points[j][i];
                 point[j] = points[j][i];
                 // Do any needed domain transforms
@@ -113,7 +112,7 @@ public:
 //    }
 
     void compute_cartesian_indices(const double *point, size_t *cartesian_indices) const {
-        for (size_t i = 0; i < num_dim; i++){
+        for (size_t i = 0; i != num_dim; i++){
             // restrict the point to fall within the real domain (as opposed to the index domain)
             double p = std::max(std::min(point[i], domain[i * 2 + 1]), domain[i * 2 + 0]);
             // compute cartesian index
@@ -140,15 +139,15 @@ private:
     double index_domain[num_dim * 2];
 //    size_t offsets[num_model_classes];
 //    size_t model_array_offsets[num_model_classes];
-    char encoding_array[mapping_array_size];
-    double node_values[encoding_array_size];
+    char encoding_array[encoding_array_size];
+    double node_values[mapping_array_size];
 //    double model_arrays[model_array_size];
     double* current_cell_domain;
-    double* current_weights;
+    double current_weights[50];
     size_t current_model_type_index;
     /* Declare the PTHash function. */
     typedef pthash::single_phf<pthash::murmurhash2_64,         // base hasher
-            pthash::dictionary_dictionary,  // encoder type
+            pthash::compact_compact,  // encoder type
             true                    // minimal
     > pthash_type;
     pthash_type mphf;
@@ -156,8 +155,8 @@ private:
     pthash_type load_mphf(std::string location){
         /* Set up a build configuration. */
         pthash::build_configuration config;
-        config.c = 6.0;
-        config.alpha = 0.94;
+        config.c = 2.5;
+        config.alpha = 0.99;
         config.minimal_output = true;  // mphf
         config.verbose_output = true;
 
@@ -181,7 +180,7 @@ private:
         // unpack depth and type from char array
         // -- compute global index
         size_t global_index = 0;
-        for (unsigned int i = 0; i < num_dim; ++i) {
+        for (unsigned int i = 0; i != num_dim; ++i) {
             global_index += cell_index[i]*(index_transform_weights[i] - 1); // -1 since this is a cell index instead of a point index.
         }
         // -- grab encoded byte and decode
@@ -210,19 +209,19 @@ private:
             }
             // compute global index
             double global_index = 0;
-            for (int i = 0; i < num_dim; ++i) {
-                global_index += corner_index[i]*(index_transform_weights[i]);
+            for (int j = 0; j != num_dim; ++j) {
+                global_index += corner_index[j]*(index_transform_weights[j]);
             }
             // Compute hash and load value
             current_weights[i] = node_values[mphf(global_index)];
         }
         // save domain information
         // lower corner
-        for (int i = 0; i < num_dim; ++i) {
+        for (size_t i = 0; i != num_dim; ++i) {
             current_weights[weight_offset+i] = domain[i*2]+dx[i]*cell_index[i];
         }
         // upper corner
-        for (int i = 0; i < num_dim; ++i) {
+        for (size_t i = 0; i != num_dim; ++i) {
             current_weights[weight_offset+num_dim+i] = domain[i*2]+dx[i]*(cell_index[i] + cell_edge_index_size);
         }
         current_cell_domain = compute_cell_domain(current_weights);
@@ -230,7 +229,7 @@ private:
 
     bool point_in_current_cell(const double* point_domain){
         // determine if point is in current domain.
-        for (size_t i = 0; i<num_dim; i++){
+        for (size_t i = 0; i != num_dim; i++){
             if ((point_domain[i] < current_cell_domain[i])
                 || (point_domain[i] > current_cell_domain[i+num_dim])){
                 return false;
@@ -243,7 +242,7 @@ private:
         if (spacing[dim] == 0){
             return;
         } else if (spacing[dim] == 1){
-            for (size_t j = 0; j < num_vars; j++){
+            for (size_t j = 0; j != num_vars; j++){
                 dim_array[j] = log10(dim_array[j]);
             }
         } else {
@@ -253,6 +252,7 @@ private:
 
     void load_emulator(const std::string& file_location){
         // Load hdf5 file
+        std::cout << file_location << std::endl;
         HighFive::File file(file_location, HighFive::File::ReadOnly);
 
         // -- domain
@@ -288,7 +288,7 @@ private:
         // -- encoding array
         HighFive::DataSet dataset = mapping_group.getDataSet("encoding");
         dataset.template read(encoding_array);
-        dataset = mapping_group.getDataSet("node_values");
+        dataset = mapping_group.getDataSet("node_values_encoded");
         dataset.template read(node_values);
 //        assert(num_models == dataset.getElementCount());
 //        // -- indexing array
@@ -379,14 +379,14 @@ private:
          */
         // transform point to domain [0,1]
         double x[num_dim];
-        for (size_t i = 0; i < num_dim; i++){
+        for (size_t i = 0; i != num_dim; i++){
             x[i] = (point[i] - weight[weight_offset + i]) / (weight[weight_offset + num_dim + i] - weight[weight_offset + i]);
         }
         // apply weights
         double solution = 0;
-        for (size_t i = 0; i < weight_offset; i++){
+        for (size_t i = 0; i != weight_offset; i++){
             double w = 1;
-            for (size_t j = 0; j < num_dim; j++){
+            for (size_t j = 0; j != num_dim; j++){
                 auto bit = (i >> j) & 1;
                 w *= bit == 0 ? (1 - x[j]) : x[j];
             }

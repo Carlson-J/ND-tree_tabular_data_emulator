@@ -8,34 +8,30 @@
 #define POINT_GROUPING double* points[3] = {x,y,z}
 #define POINT_ARG x, y, z
 
-extern "C" {
-Emulator<ND_TREE_EMULATOR_TYPE>* ND_TREE_EMULATOR_NAME_SETUP(const char* filename) {
-    return new Emulator<ND_TREE_EMULATOR_TYPE>(filename);
-}
-void ND_TREE_EMULATOR_NAME_INTERPOLATE(Emulator<ND_TREE_EMULATOR_TYPE>* emulator, double** points, size_t num_points, double* return_array) {
-    emulator->interpolate(points, num_points, return_array);
-}
-void ND_TREE_EMULATOR_NAME_FREE(Emulator<ND_TREE_EMULATOR_TYPE>* emulator){
-    free(emulator);
-}
-}
+// extern "C" {
+// Emulator<ND_TREE_EMULATOR_TYPE>* ND_TREE_EMULATOR_NAME_SETUP(const char* filename) {
+//     return new Emulator<ND_TREE_EMULATOR_TYPE>(filename);
+// }
+// void ND_TREE_EMULATOR_NAME_INTERPOLATE(Emulator<ND_TREE_EMULATOR_TYPE>* emulator, double** points, size_t num_points, double* return_array) {
+//     emulator->interpolate(points, num_points, return_array);
+// }
+// void ND_TREE_EMULATOR_NAME_FREE(Emulator<ND_TREE_EMULATOR_TYPE>* emulator){
+//     free(emulator);
+// }
+// }
 
-//extern "C" {
-//    void ND_TREE_EMULATOR_NAME_SETUP(const char* filename, void*& emulator) {
-//        // std::cout << "Loading emulator from file at " << filename << std::endl;
-//        emulator = (void*)(new Emulator<ND_TREE_EMULATOR_TYPE>(filename));
-//        // std::cout << "emulator: " << emulator << std::endl;
-//    }
-////    void ND_TREE_EMULATOR_NAME_INTERPOLATE(void*& emulator, POINT_INPUTS, size_t& num_points, double* return_array) {
-////        POINT_GROUPING;
-////        ((Emulator<ND_TREE_EMULATOR_TYPE> *)emulator)->interpolate(points, num_points, return_array);
-////    }
-//    void ND_TREE_EMULATOR_NAME_INTERPOLATE(void*& emulator, double** points, size_t& num_points, double* return_array) {
-//        ((Emulator<ND_TREE_EMULATOR_TYPE> *)emulator)->interpolate(points, num_points, return_array);
-//    }
-//    void ND_TREE_EMULATOR_NAME_FREE(void*& emulator){
-//
-//        // std::cout << "emulator to delete: " << emulator << std::endl;
-//        delete((Emulator<ND_TREE_EMULATOR_TYPE>*)emulator);
-//    }
-//}
+extern "C" {
+   void ND_TREE_EMULATOR_NAME_SETUP(const char* filename, void*& emulator) {
+       emulator = (void*)(new Emulator<ND_TREE_EMULATOR_TYPE>(filename));
+       // std::cout << "emulator: " << emulator << std::endl;
+   }
+   void ND_TREE_EMULATOR_NAME_INTERPOLATE(void*& emulator, POINT_INPUTS, size_t& num_points, double* return_array) {
+       POINT_GROUPING;
+       ((Emulator<ND_TREE_EMULATOR_TYPE> *)emulator)->interpolate(points, num_points, return_array);
+   }
+   void ND_TREE_EMULATOR_NAME_FREE(void*& emulator){
+
+       // std::cout << "emulator to delete: " << emulator << std::endl;
+       delete((Emulator<ND_TREE_EMULATOR_TYPE>*)emulator);
+   }
+}
