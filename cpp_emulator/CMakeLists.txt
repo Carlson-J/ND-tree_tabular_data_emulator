@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -Wall -Wextra -fopenmp -march=native -std=c++17")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -march=native -g -Wall -Wextra -fopenmp") 
 
 project(build_mapping)
 add_executable(make_mapping PMHF_mapping/build_mapping.cpp)

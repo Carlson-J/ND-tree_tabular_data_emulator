@@ -22,7 +22,6 @@
 
 extern "C" {
    void ND_TREE_EMULATOR_NAME_SETUP(const char* filename, void*& emulator) {
-       // std::cout << "Loading emulator from file at " << filename << std::endl;
        emulator = (void*)(new Emulator<ND_TREE_EMULATOR_TYPE>(filename));
        // std::cout << "emulator: " << emulator << std::endl;
    }
