@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.16)
 project(profiler)
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -Wall -Wextra -fopenmp -march=native")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -Wall -Wextra -fopenmp")
 add_compile_options(-DHIGHFIVE_USE_BOOST=OFF)
 
 add_subdirectory(HighFive)

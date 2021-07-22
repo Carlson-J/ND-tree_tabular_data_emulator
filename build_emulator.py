@@ -17,12 +17,12 @@ if __name__ == "__main__":
     # If the emulator has already been made, but you want to regenerate the C++ library set to True
     skip_emulator_creation = True
     # Directory where the emulator should be saved. Will be created if it does note exist.
-    save_directory = "./profiling"
+    save_directory = "./profiling_sparse_best"
     cpp_source_dir = './cpp_emulator'
     # Name of emulator. This will be used to construct the name used when calling the compiled version and
     # -- and determining the filenames of the various saved files.
     # -- It should not contain spaces, nasty special characters or a file extension
-    emulator_name = "test1"
+    emulator_name = "test1_sparse_best"
 
     if not skip_emulator_creation:
 
@@ -43,9 +43,9 @@ if __name__ == "__main__":
         # -- for example. If the smallest values in dims is 2**3+1, then the max depth you
         # -- can choose is 3.
         max_depth = 9
-        error_threshold = -1.0 
-        max_test_points = 1       # The max number of points to eval in a cell when estimating the error
-        relative_error = False      # Whether or not the error threshold is absolute or relative error
+        error_threshold = 100 
+        max_test_points = 100       # The max number of points to eval in a cell when estimating the error
+        relative_error = True      # Whether or not the error threshold is absolute or relative error
 
         # create the emulator (should not need to modify this)
         emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes,

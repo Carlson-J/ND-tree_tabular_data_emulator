@@ -2,7 +2,7 @@
 #undef ND_TREE_EMULATOR_NAME_SETUP
 #undef ND_TREE_EMULATOR_NAME_INTERPOLATE
 #undef ND_TREE_EMULATOR_NAME_FREE
-#define ND_TREE_EMULATOR_TYPE unsigned long, unsigned long, 1, 3, 8388608, 117440512
-#define ND_TREE_EMULATOR_NAME_SETUP test1_emulator_setup
-#define ND_TREE_EMULATOR_NAME_INTERPOLATE test1_emulator_interpolate
-#define ND_TREE_EMULATOR_NAME_FREE test1_emulator_free
+#define ND_TREE_EMULATOR_TYPE unsigned char, unsigned char, 1, 3, 1, 14
+#define ND_TREE_EMULATOR_NAME_SETUP test1_sparse_best_emulator_setup
+#define ND_TREE_EMULATOR_NAME_INTERPOLATE test1_sparse_best_emulator_interpolate
+#define ND_TREE_EMULATOR_NAME_FREE test1_sparse_best_emulator_free

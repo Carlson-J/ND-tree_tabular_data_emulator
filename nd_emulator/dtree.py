@@ -256,7 +256,7 @@ The max depth has been changed to {max_depth}.
         # compute error based on type of error desired
         errors = abs(true - interp)
         mask_zero = errors != 0
-        if self.params.relative_error:
+        if self.params.relative_error and np.max(errors) > 0:
             errors[true != 0 & mask_zero] = abs(true[true != 0 & mask_zero] - interp[true != 0 & mask_zero]) / abs(true[true != 0 & mask_zero])
             errors[true == 0 & mask_zero] = abs(true[true == 0 & mask_zero] - interp[true == 0 & mask_zero]) / (abs(true[true == 0 & mask_zero]) + abs(interp[true == 0 & mask_zero]))
             
