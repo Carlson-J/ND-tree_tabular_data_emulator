@@ -345,7 +345,7 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
     new_env = dict(os.environ)
     new_env['EMULATOR_NAME'] = emulator_name
     # -- Create build files
-    cmakeCmd = ["cmake", '-S', cpp_source_dir, '-B', tmp_dir, '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
+    cmakeCmd = ["cmake", '-S', cpp_source_dir, '-B', tmp_dir, '-DCMAKE_BUILD_TYPE=RelWithDebInfo'] #RelWithDebInfo
     subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell, env=new_env)
     # -- build C++ code
     cmakeCmd = ["cmake", '--build', tmp_dir, '--target', 'ND_emulator_lib', '--verbose']
