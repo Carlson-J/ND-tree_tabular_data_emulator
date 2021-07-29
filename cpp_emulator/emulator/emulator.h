@@ -38,15 +38,25 @@ public:
         num_cell_corners = weight_offset;
         // compute max index
         max_index = (1<<max_depth) - 1; //size_t(pow(2, max_depth) - 1);
-        // Compute weights for transforming cartesian into 1d dim
+        // Compute weights for transforming cartesian point index into 1d dim
         for (size_t i = 0; i != num_dim; ++i) {
-            index_transform_weights[i] = 1;
+            point_index_transform_weights[i] = 1;
         }
-        for (int i = num_dim-2; i >= 0; i--) {
-            for (int j = i; j >= 0; j--) {
-                index_transform_weights[j] *= dims[i];
+        for (size_t i = 0; i < num_dim -1; i++){
+            for (size_t j = i + 1; j < num_dim; j++){
+                point_index_transform_weights[i] *= dims[j];
             }
         }
+        // Compute weights for transforming cartesian cell index into 1d dim
+        for (size_t i = 0; i != num_dim; ++i) {
+            cell_index_transform_weights[i] = 1;
+        }
+        for (size_t i = 0; i < num_dim -1; i++){
+            for (size_t j = i + 1; j < num_dim; j++){
+                cell_index_transform_weights[i] *= dims[j] - 1;  // -1 since this is a cell index instead of a point index.
+            }
+        }
+
         // load minimal perfect hash function
         mphf = load_mphf(mphf_location);
         // Set current cell to the first cell, morton index 0, by giving the lower part of the domain
@@ -133,7 +143,8 @@ private:
     size_t model_class_weights[num_model_classes];
     size_t spacing[num_dim];
     size_t dims[num_dim];
-    size_t index_transform_weights[num_dim];
+    size_t point_index_transform_weights[num_dim];
+    size_t cell_index_transform_weights[num_dim];
     double dx[num_dim];
     double domain[num_dim * 2];
     double index_domain[num_dim * 2];
@@ -181,7 +192,7 @@ private:
         // -- compute global index
         size_t global_index = 0;
         for (unsigned int i = 0; i != num_dim; ++i) {
-            global_index += cell_index[i]*(index_transform_weights[i] - 1); // -1 since this is a cell index instead of a point index.
+            global_index += cell_index[i]*(cell_index_transform_weights[i]); 
         }
         // -- grab encoded byte and decode
         char byte = encoding_array[global_index];
@@ -210,10 +221,11 @@ private:
             // compute global index
             double global_index = 0;
             for (int j = 0; j != num_dim; ++j) {
-                global_index += corner_index[j]*(index_transform_weights[j]);
+                global_index += corner_index[j]*(point_index_transform_weights[j]);
             }
             // Compute hash and load value
-            current_weights[i] = node_values[mphf(global_index)];
+            size_t node_index = mphf(global_index);
+            current_weights[i] = node_values[node_index];
         }
         // save domain information
         // lower corner
