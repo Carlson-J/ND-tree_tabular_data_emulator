@@ -24,24 +24,28 @@ public:
         for (auto& i : array) {
             i = -1;
         }
+        for (int i = 0; i < N_vars; ++i) {
+            global_array[i] = (float)i*2.0f;
+        }
     };
-    int add_element(int var){
+    float load_element(int var){
         // get a random element from the array. If it is not there, add it
         int pulled_var = 0;
         // check if it is in the array already
         for (unsigned int i = start; i != end; i=(i + 1) % N) {
             if (var == array[i]){
-                return i;
+                return local_array[i];
             }
         }
         // If it was not found, add the element
         array[end] = var;
-        pulled_var = end;
+        local_array[end] = global_array[var];
+        auto return_vale = local_array[end];
         end = (end + 1) % N;
         if (start == end){
             start = (start + 1) % N;
         }
-        return pulled_var;
+        return return_vale;
     }
     string get_array(){
         stringstream str_out;
@@ -51,6 +55,8 @@ public:
         return str_out.str();
     }
     int array[N];
+    float local_array[N];
+    float global_array[N_vars];
 private:
     unsigned int start{0};
     unsigned int end{0};
@@ -81,10 +87,10 @@ int main(){
         for (int i = 0; i < M; ++i) {
             // Create random number between 0 and N
             int var = rand() % N_vars;
-            int loaded_index = loader.add_element(var);
-            if (var != loader.array[loaded_index]){
+            float loaded_var = loader.load_element(var);
+            if (((float)var*2.0f) != loaded_var){
                 print_mtx.lock();
-                cout << "id:" << std::setfill (' ') << std::setw (2) << id << " Failed to get right element at " << loaded_index << " (" << loader.array[loaded_index] << "!=" << var << ")" << endl;
+                cout << "id:" << std::setfill (' ') << std::setw (2) << id << " Failed to get right element (" << loaded_var << "!=" << ((float)var*2.0f)  << ")" << endl;
                 print_mtx.unlock();
             }
 //            print_mtx.lock();
