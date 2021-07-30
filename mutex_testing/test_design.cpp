@@ -12,9 +12,9 @@
 #include <iomanip>      // std::setfill, std::setw
 #include "ctime"
 
-#define N 100
-#define N_vars 400
-#define M 10000
+#define N 10
+#define N_vars 40
+#define M 10000000
 #define NUM_THREADS 4
 using namespace std;
 
@@ -29,28 +29,54 @@ public:
         }
     };
     float load_element(int var){
-        // get a random element from the array. If it is not there, add it
-        int pulled_var = 0;
+        /*
+         * Loading an element is done from a local array. The element id is search for in an id array. If it is found,
+         * the data from the local array that the id array points to is loaded and returned. This can be done as long
+         * as the start and stop indices are not being updated, i.e., each reader has a shared mutex.
+         * The start and stop indices show which part of the cyclical array are currently loaded into the local array.
+         * It will start at 0 elements and then grow to N-1 in size. Once to the max size, both start and end increase
+         * by one whenever a new element is added. This allows for one spot on the array that is free to be changed
+         * without stopping the reads.
+         * An editor mutex is used to keep only one thread from editing the editable portion of the array. Once it is
+         * done editing, it takes a unique mutex that stops all other threads from accessing the local array. It then
+         * updates the indices and returns both of its locks.
+         */
+        // get an element from the array. If it is not there, add it
         // check if it is in the array already
+        update_range_mtx.lock_shared();
         for (unsigned int i = start; i != end; i=(i + 1) % N) {
             if (var == array[i]){
-                return local_array[i];
+                auto return_var = local_array[i];
+                update_range_mtx.unlock_shared();
+                return return_var;
             }
         }
+        update_range_mtx.unlock_shared();
         // If it was not found, add the element
+        edit_array_mtx.lock();  // Lock ability to edit array sections not covered by [start, end)
+        // load vars into mutable section of tables. Note that A[end%N] is always available to be mutated, as start!=end
         array[end] = var;
         local_array[end] = global_array[var];
+        // Update local cache/vec/scalar
         auto return_vale = local_array[end];
-        end = (end + 1) % N;
-        if (start == end){
-            start = (start + 1) % N;
+        // precompute the new indices
+        auto new_end = (end + 1) % N;
+        auto new_start = start;
+        if (new_start == new_end){
+            new_start = (new_start + 1) % N;
         }
+        // update indices
+        update_range_mtx.lock();    // Lock ranges while the editing thread updates it
+        end = new_end;
+        start = new_start;
+        update_range_mtx.unlock();  // release range lock
+        edit_array_mtx.unlock();    // release edit lock
         return return_vale;
     }
     string get_array(){
         stringstream str_out;
-        for (int i = 0; i < N; ++i) {
-            str_out << std::setfill (' ') << std::setw (2) << array[i] << " ";
+        for (int i : array) {
+            str_out << std::setfill (' ') << std::setw (2) << i << " ";
         }
         return str_out.str();
     }
@@ -72,8 +98,6 @@ int main(){
     omp_set_dynamic(0);
 
     mutex print_mtx;
-
-
     // create loader
     Loader loader;
     // print out initial array
