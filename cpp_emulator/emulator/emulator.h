@@ -213,7 +213,7 @@ private:
             size_t corner_index[num_dim];
             // determine corner index
             for (int j = 0; j != num_dim; ++j) {
-                corner_index[j] = cell_index[j];
+                corner_index[j] = (cell_index[j]>>depth_diff)<<depth_diff;
                 if ((i >> j) & 1){
                     corner_index[j] += cell_edge_index_size;
                 }
@@ -230,11 +230,11 @@ private:
         // save domain information
         // lower corner
         for (size_t i = 0; i != num_dim; ++i) {
-            current_weights[weight_offset+i] = domain[i*2]+dx[i]*cell_index[i];
+            current_weights[weight_offset+i] = domain[i*2]+dx[i]*((cell_index[i]>>depth_diff)<<depth_diff);
         }
         // upper corner
         for (size_t i = 0; i != num_dim; ++i) {
-            current_weights[weight_offset+num_dim+i] = domain[i*2]+dx[i]*(cell_index[i] + cell_edge_index_size);
+            current_weights[weight_offset+num_dim+i] = domain[i*2]+dx[i]*(((cell_index[i]>>depth_diff)<<depth_diff) + cell_edge_index_size);
         }
         current_cell_domain = compute_cell_domain(current_weights);
     }
