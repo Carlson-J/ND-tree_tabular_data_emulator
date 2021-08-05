@@ -99,7 +99,7 @@ int main() {
 //        }
 //        new_node_values[i] = node_values[f(indexing[i])];
 //    }
-//    mapping_group.createDataSet<double>("node_values_encoded", HighFive::DataSpace::From(new_node_values));
+    mapping_group.createDataSet<double>("node_values_encoded", HighFive::DataSpace::From(new_node_values));
     dataset = mapping_group.getDataSet("node_values_encoded");
     dataset.write(new_node_values);
 

@@ -53,12 +53,12 @@ public:
         }
         update_range_mtx.unlock_shared();
         // If it was not found, add the element
+        // First load it into local array, this way we don't have to lock things while it gets loaded into cache
+        auto return_vale = global_array[var];
         edit_array_mtx.lock();  // Lock ability to edit array sections not covered by [start, end)
         // load vars into mutable section of tables. Note that A[end%N] is always available to be mutated, as start!=end
+        local_array[end] = return_vale;
         array[end] = var;
-        local_array[end] = global_array[var];
-        // Update local cache/vec/scalar
-        auto return_vale = local_array[end];
         // precompute the new indices
         auto new_end = (end + 1) % N;
         auto new_start = start;

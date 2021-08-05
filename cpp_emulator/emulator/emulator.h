@@ -88,15 +88,16 @@ public:
          * input space to each cell is included in the offline emulator.
          */
         // distribute points to interpolate among threads
-        double local_weights[(1<<num_dim)+num_dim*2];
+        double local_weights[weight_size];
 
         for (unsigned int i = 0; i != num_points; i++){
             // load points into local array
             double point_domain[num_dim];
             double point[num_dim];
             for (size_t j = 0; j != num_dim; j++){
-                point_domain[j] = points[j][i];
-                point[j] = points[j][i];
+                // project into domain, no extrapolating
+                point_domain[j] = points[j][i]; //fmin(fmax(points[j][i], domain[i]), domain[i+num_dim]);
+                point[j] = point_domain[j];
                 // Do any needed domain transforms
                 domain_transform(&point_domain[j], j, 1);
             }
@@ -153,6 +154,7 @@ public:
 
 private:
     size_t max_weight_size;
+    size_t weight_size = (1<<num_dim)+num_dim*2;
     size_t max_index;
     size_t max_depth;
     size_t weight_offset;
@@ -189,7 +191,7 @@ private:
     std::shared_mutex point_cache_range;
     // data for cell array
     indexing_int cell_cache_indices[CELL_CACHE_SIZE];
-    double cell_cache_values[CELL_CACHE_SIZE*(1<<num_dim)];
+    double cell_cache_values[CELL_CACHE_SIZE*((1<<num_dim)+num_dim*2)];
     size_t cell_cache_start;
     size_t cell_cache_end;
     std::mutex cell_cache_edit;
@@ -208,8 +210,8 @@ private:
         }
         // load vars into mutable section of tables. Note that A[end%N] is always available to be mutated, as start!=end
         cell_cache_indices[cell_cache_end] = cell_index;
-        for (int i = 0; i < (1<<num_dim); ++i) {
-            cell_cache_values[cell_cache_end*(1<<num_dim) + i] = cell_weights[i];
+        for (int i = 0; i < weight_size; ++i) {
+            cell_cache_values[cell_cache_end*weight_size + i] = cell_weights[i];
         }
         // precompute the new indices
         auto new_end = (cell_cache_end + 1) % CELL_CACHE_SIZE;
@@ -234,8 +236,8 @@ private:
         cell_cache_range.lock_shared();
         for (size_t i = cell_cache_start; i != cell_cache_end; i=(i+1)%CELL_CACHE_SIZE) {
             if (cell_index == cell_cache_indices[i]){
-                for (int j = 0; j < (1 << num_dim); ++j) {
-                    local_weights[j] = cell_cache_values[j*(1 << num_dim)];
+                for (int j = 0; j < weight_size; ++j) {
+                    local_weights[j] = cell_cache_values[i*weight_size+j];
                 }
                 cell_cache_range.unlock_shared();
                 return true;
@@ -304,13 +306,14 @@ private:
     }
 
     inline size_t compute_global_index_of_corner(const size_t* cell_indices, unsigned int corner,
-                                                 unsigned short int cell_edge_size){
+                                                 unsigned short int depth_diff){
+        size_t cell_edge_size = (1<<depth_diff);
         size_t global_index = 0;
         for (unsigned int i = 0; i != num_dim; ++i) {
             if ((corner >> i) & 1){
-                global_index += (cell_indices[i] + cell_edge_size)*(cell_index_transform_weights[i]);
+                global_index += (cell_indices[i] + cell_edge_size)*(point_index_transform_weights[i]);
             } else{
-                global_index += cell_indices[i]*(cell_index_transform_weights[i]);
+                global_index += cell_indices[i]*(point_index_transform_weights[i]);
             }
         }
         return global_index;
@@ -338,16 +341,17 @@ private:
                 // Load point
                 load_point(type, point_index,cell_weights[i]);
             }
+            // load domain information into weight vector
+            // lower and upper corner
+            auto cell_edge_index_size = 1 << depth_diff;
+            for (size_t i = 0; i != num_dim; ++i) {
+                cell_weights[weight_offset+i] = domain[i*2]+dx[i]*local_cell_index[i];
+                cell_weights[weight_offset+num_dim+i] = domain[i*2]+dx[i]*(local_cell_index[i] + cell_edge_index_size);
+            }
             // update shared cell array with weights
             update_shared_cell_array(type, cell_index, cell_weights);
         }
-        // load domain information into weight vector
-        // lower and upper corner
-        auto cell_edge_index_size = 1 << depth_diff;
-        for (size_t i = 0; i != num_dim; ++i) {
-            cell_weights[weight_offset+i] = domain[i*2]+dx[i]*local_cell_index[i];
-            cell_weights[weight_offset+num_dim+i] = domain[i*2]+dx[i]*(local_cell_index[i] + cell_edge_index_size);
-        }
+
     }
 
     pthash_type load_mphf(std::string location){
@@ -545,9 +549,9 @@ private:
 //                                *model_class_weights[current_model_type_index]];
 //    }
 
-    double* compute_cell_domain(double* weights){
+    const double* compute_cell_domain(const double* weights){
         // return pointer to the domain
-        return &weights[weight_offset];
+        return &weights[(1<<num_dim)];
     }
 
 
@@ -556,15 +560,18 @@ private:
         if (model_classes[current_model_type_index] == MODEL_CLASS_TYPE_ND_LINEAR){
             if (transforms[current_model_type_index] == TRANSFORMS_NONE){
                 return nd_linear_interp(point, current_weights);
-            } else if (transforms[current_model_type_index] == TRANSFORMS_LOG){
-                double solution = nd_linear_interp(point, current_weights+1);
-                solution = pow(10.0, solution);
-                if (current_weights[0] != 0.0){
-                    solution -= std::fabs(current_weights[0]);
-                    solution *=  copysign(1.0, current_weights[0]);
-                }
-                return solution;
-            } else{
+            }
+            // TODO: allow for multiple model classes
+//            else if (transforms[current_model_type_index] == TRANSFORMS_LOG){
+//                double solution = nd_linear_interp(point, current_weights+1);
+//                solution = pow(10.0, solution);
+//                if (current_weights[0] != 0.0){
+//                    solution -= std::fabs(current_weights[0]);
+//                    solution *=  copysign(1.0, current_weights[0]);
+//                }
+//                return solution;
+//            }
+            else{
                 throw std::exception(); //"Unknown transform"
             }
         } else{
@@ -581,8 +588,9 @@ private:
          */
         // transform point to domain [0,1]
         double x[num_dim];
+        const double* cell_domain = compute_cell_domain(weight);
         for (size_t i = 0; i != num_dim; i++){
-            x[i] = (point[i] - weight[weight_offset + i]) / (weight[weight_offset + num_dim + i] - weight[weight_offset + i]);
+            x[i] = (point[i] - cell_domain[i]) / (cell_domain[num_dim + i] - cell_domain[i]);
         }
         // apply weights
         double solution = 0;
