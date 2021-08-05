@@ -15,6 +15,7 @@
 #include <cmath>
 #include <mutex>
 #include <shared_mutex>
+#include <omp.h>
 //#include <morton-nd/mortonND_BMI2.h>
 //#include <morton-nd/mortonND_LUT.h>
 //
@@ -26,9 +27,13 @@ template <typename indexing_int, size_t num_model_classes, size_t num_dim,
         size_t mapping_array_size, size_t encoding_array_size>
 class Emulator {
 public:
+    /**
+     * ND-Emulator. Loads a previously built/trained emulator.
+     * @param filename Location of hdf5 file containing the emulator
+     * @param mphf_location Location of the Minimal Perfect Hashing function mapping
+     */
     Emulator(std::string filename, std::string mphf_location){
         load_emulator(filename);
-        // TODO: compute max_weight_size
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
@@ -42,7 +47,7 @@ public:
         weight_offset = 1<<num_dim; //std::pow(2, num_dim);
         num_cell_corners = weight_offset;
         // compute max index
-        max_index = (1<<max_depth) - 1; //size_t(pow(2, max_depth) - 1);
+        max_index = (1<<max_depth) - 1;
         // Compute weights for transforming cartesian point index into 1d dim
         for (size_t i = 0; i != num_dim; ++i) {
             point_index_transform_weights[i] = 1;
@@ -66,94 +71,56 @@ public:
         mphf = load_mphf(mphf_location);
     }
 
+    /**
+     * The interpolation is done using an emulator that has been computed offline and loaded when
+     * the object is instantiated. The type of interpolation can vary throughout the table, which is
+     * divided into cells. These cells are defined by a nd-tree decomposition. The mapping from the
+     * input space to each cell is included in the offline emulator.
+     * @param points An array of double pointers, with size num_dim.
+     *      Each pointer points to an array of doubles size num_points, with the index
+     *      corresponding dimension of the point, i.e.,
+     *      points = [
+     *          [x0_0, x0_1, ...,x0_num_points],
+     *          [x1_0, x1_1, ...,x1_num_points],
+     *          ...
+     *          [xN_0, xN_1, ...,xN_num_points],
+     *      ]
+     *      where N = num_dim.
+     *      This allows for any number of dimensions to be used without changing the method.
+     * @param num_points the number of points that will be interpolated over.
+     * @param return_array Any array of size num_points that will be modified.
+     */
     void interpolate(double** points, size_t num_points, double* return_array){
-        /*
-         * points: An array of double pointers, with size num_dim.
-         *      Each pointer points to an array of doubles size num_points, with the index
-         *      corresponding dimension of the point, i.e.,
-         *      points = [
-         *          [x0_0, x0_1, ...,x0_num_points],
-         *          [x1_0, x1_1, ...,x1_num_points],
-         *          ...
-         *          [xN_0, xN_1, ...,xN_num_points],
-         *      ]
-         *      where N = num_dim.
-         *      This allows for any number of dimensions to be used without changing the method.
-         * num_points: the number of points that will be interpolated over.
-         * return_array: Any array of size num_points that will be modified.
-         *
-         * The interpolation is done using an emulator that has been computed offline and loaded when
-         * the object is instantiated. The type of interpolation can vary throughout the table, which is
-         * divided into cells. These cells are defined by a nd-tree decomposition. The mapping from the
-         * input space to each cell is included in the offline emulator.
-         */
         // distribute points to interpolate among threads
-        double local_weights[weight_size];
-
-        for (unsigned int i = 0; i != num_points; i++){
-            // load points into local array
-            double point_domain[num_dim];
-            double point[num_dim];
-            for (size_t j = 0; j != num_dim; j++){
-                // project into domain, no extrapolating
-                point_domain[j] = points[j][i]; //fmin(fmax(points[j][i], domain[i]), domain[i+num_dim]);
-                point[j] = point_domain[j];
-                // Do any needed domain transforms
-                domain_transform(&point_domain[j], j, 1);
+        #pragma omp parallel default(shared)    // NOLINT(openmp-use-default-none)
+        {
+            double local_weights[weight_size];
+            bool first_iteration = true;
+            std::cout << "Thread: " << omp_get_thread_num() << std::endl;
+            #pragma omp for schedule(auto)
+            for (unsigned int i = 0; i < num_points; i++){
+                // load points into local array
+                double point_domain[num_dim];
+                double point[num_dim];
+                for (size_t j = 0; j != num_dim; j++){
+                    point_domain[j] = points[j][i];
+                    point[j] = point_domain[j];
+                    // Do any needed domain transforms
+                    domain_transform(&point_domain[j], j, 1);
+                }
+                // Check if current loaded cell is the correct cell
+                if (first_iteration || !point_in_current_cell(point_domain, local_weights)){
+                    // load cell
+                    first_iteration = false;
+                    load_cell(point_domain, local_weights);
+                }
+                // do interpolation
+                return_array[i] = interp_point(point, local_weights);
             }
-            // load cell
-            load_cell(point_domain, local_weights);
-            // do interpolation
-            return_array[i] = interp_point(point, local_weights);
-        }
-
-//        // Determine which model (i.e. interpolator) each point will use.
-//        for (size_t i = 0; i != num_points; i++){
-//            double point_domain[num_dim];
-//            double point[num_dim];
-//            for (size_t j = 0; j != num_dim; j++){
-//                point_domain[j] = points[j][i];
-//                point[j] = points[j][i];
-//                // Do any needed domain transforms
-//                domain_transform(&point_domain[j], j, 1);
-//            }
-//            // Check if we are already in correct cell.
-//            if (!point_in_current_cell(point_domain)){
-//                update_current_cell(point_domain);
-//            }
-//            return_array[i] = interp_point(point);
-//        }
-    }
-
-//    encoding_int compute_tree_index(const double* point){
-//        // Compute index of the cell that the point falls in in the tree index space
-//        size_t cartesian_indices[num_dim];
-//        compute_cartesian_indices(point, cartesian_indices);
-//        // TODO: change this to use nd-morton
-//        // convert to tree index space
-//        size_t index = 0;
-//        for (size_t i = 0; i < max_depth; i++){
-//            for (size_t j = 0; j < num_dim; j++){
-//                index = (index << 1) | ((cartesian_indices[num_dim - 1 - j] >> (max_depth - i - 1)) & 1);
-//            }
-//        }
-//        return encoding_int(index);
-//    }
-
-    void compute_cartesian_indices(const double *point, size_t *cartesian_indices) const {
-        for (size_t i = 0; i != num_dim; i++){
-            // restrict the point to fall within the real domain (as opposed to the index domain)
-            double p = std::max(std::min(point[i], domain[i * 2 + 1]), domain[i * 2 + 0]);
-            // compute cartesian index
-            cartesian_indices[i] = size_t((p - domain[i * 2 + 0]) / dx[i]);
-            // If the index is outside the index domain of the emulator round to the nearest cell.
-            cartesian_indices[i] = std::max(size_t(0), cartesian_indices[i]);
-            cartesian_indices[i] = std::min(max_index, cartesian_indices[i]);
         }
     }
 
 private:
-    size_t max_weight_size;
     size_t weight_size = (1<<num_dim)+num_dim*2;
     size_t max_index;
     size_t max_depth;
@@ -161,7 +128,6 @@ private:
     size_t num_cell_corners;
     size_t model_classes[num_model_classes];
     size_t transforms[num_model_classes];
-    size_t model_class_weights[num_model_classes];
     size_t spacing[num_dim];
     size_t dims[num_dim];
     size_t point_index_transform_weights[num_dim];
@@ -169,12 +135,8 @@ private:
     double dx[num_dim];
     double domain[num_dim * 2];
     double index_domain[num_dim * 2];
-//    size_t offsets[num_model_classes];
-//    size_t model_array_offsets[num_model_classes];
     char encoding_array[encoding_array_size];
     double node_values[mapping_array_size];
-//    double model_arrays[model_array_size];
-    double* current_cell_domain;
     size_t current_model_type_index;
     /* Declare the PTHash function. */
     typedef pthash::single_phf<pthash::murmurhash2_64,         // base hasher
@@ -197,6 +159,17 @@ private:
     std::mutex cell_cache_edit;
     std::shared_mutex cell_cache_range;
 
+    void compute_cartesian_indices(const double *point, size_t *cartesian_indices) const {
+        for (size_t i = 0; i != num_dim; i++){
+            // restrict the point to fall within the real domain (as opposed to the index domain)
+            double p = std::max(std::min(point[i], domain[i * 2 + 1]), domain[i * 2 + 0]);
+            // compute cartesian index
+            cartesian_indices[i] = size_t((p - domain[i * 2 + 0]) / dx[i]);
+            // If the index is outside the index domain of the emulator round to the nearest cell.
+            cartesian_indices[i] = std::max(size_t(0), cartesian_indices[i]);
+            cartesian_indices[i] = std::min(max_index, cartesian_indices[i]);
+        }
+    }
 
     void update_shared_cell_array(unsigned short int type, size_t cell_index, const double* cell_weights){
         // Update shared cell cache with local array
@@ -210,7 +183,7 @@ private:
         }
         // load vars into mutable section of tables. Note that A[end%N] is always available to be mutated, as start!=end
         cell_cache_indices[cell_cache_end] = cell_index;
-        for (int i = 0; i < weight_size; ++i) {
+        for (size_t i = 0; i < weight_size; ++i) {
             cell_cache_values[cell_cache_end*weight_size + i] = cell_weights[i];
         }
         // precompute the new indices
@@ -227,7 +200,6 @@ private:
         cell_cache_edit.unlock();    // release edit lock
     }
 
-
     bool try_local_cell_load(const size_t& cell_index, double* local_weights){
         // determine if this cell is loaded. If it is, copy weights into local array
         // Load cell from local shared array if it is there, if not, load from global array and add it to shared array
@@ -236,7 +208,7 @@ private:
         cell_cache_range.lock_shared();
         for (size_t i = cell_cache_start; i != cell_cache_end; i=(i+1)%CELL_CACHE_SIZE) {
             if (cell_index == cell_cache_indices[i]){
-                for (int j = 0; j < weight_size; ++j) {
+                for (size_t j = 0; j < weight_size; ++j) {
                     local_weights[j] = cell_cache_values[i*weight_size+j];
                 }
                 cell_cache_range.unlock_shared();
@@ -394,50 +366,12 @@ private:
         return global_index;
     }
 
-//    void update_current_cell(double* point_domain){
-//        // Determine type and depth of cell
-//        size_t depth = 0;
-//        size_t type = 0;
-//        size_t cell_index[num_dim];
-//        compute_cell_mapping(point_domain, depth, type, cell_index);
-//        auto depth_diff = max_depth - depth;
-//        auto cell_edge_index_size = 1 << depth_diff;
-//        // determine node points needed
-//        for (unsigned int i = 0; i != num_cell_corners; ++i) {
-//            size_t corner_index[num_dim];
-//            // determine corner index
-//            for (int j = 0; j != num_dim; ++j) {
-//                corner_index[j] = cell_index[j];
-//                if ((i >> j) & 1){
-//                    corner_index[j] += cell_edge_index_size;
-//                }
-//            }
-//            // compute global index
-//            double global_index = 0;
-//            for (int j = 0; j != num_dim; ++j) {
-//                global_index += corner_index[j]*(point_index_transform_weights[j]);
-//            }
-//            // Compute hash and load value
-//            size_t node_index = mphf(global_index);
-//            current_weights[i] = node_values[node_index];
-//        }
-//        // save domain information
-//        // lower corner
-//        for (size_t i = 0; i != num_dim; ++i) {
-//            current_weights[weight_offset+i] = domain[i*2]+dx[i]*cell_index[i];
-//        }
-//        // upper corner
-//        for (size_t i = 0; i != num_dim; ++i) {
-//            current_weights[weight_offset+num_dim+i] = domain[i*2]+dx[i]*(cell_index[i] + cell_edge_index_size);
-//        }
-//        current_cell_domain = compute_cell_domain(current_weights);
-//    }
-
-    bool point_in_current_cell(const double* point_domain){
+    bool point_in_current_cell(const double* point_domain, const double* weights){
         // determine if point is in current domain.
+        const double* cell_domain = get_cell_domain(weights);
         for (size_t i = 0; i != num_dim; i++){
-            if ((point_domain[i] < current_cell_domain[i])
-                || (point_domain[i] > current_cell_domain[i+num_dim])){
+            if ((point_domain[i] < cell_domain[i])
+            || (point_domain[i] > cell_domain[i+num_dim])){
                 return false;
             }
         }
@@ -496,64 +430,12 @@ private:
         dataset.template read(encoding_array);
         dataset = mapping_group.getDataSet("node_values_encoded");
         dataset.template read(node_values);
-//        assert(num_models == dataset.getElementCount());
-//        // -- indexing array
-//        dataset = mapping_group.getDataSet("indexing");
-//        dataset.template read(indexing_array);
-//        assert(num_models == dataset.getElementCount());
-//        // -- offsets array
-//        dataset = mapping_group.getDataSet("offsets");
-//        dataset.template read(offsets);
-//        assert(num_model_classes == dataset.getElementCount());
-
-
-//        // Load model arrays
-//        HighFive::Group model_group = file.getGroup("models");
-//        auto model_types = model_group.listObjectNames();
-//        size_t current_offset = 0;
-//        for (size_t i = 0; i < num_model_classes; i++) {
-//            model_array_offsets[i] = current_offset;
-//            dataset = model_group.getDataSet(model_types[i]);
-//            dataset.template read(&(model_arrays[current_offset]));
-//            current_offset += dataset.getElementCount();
-//            model_class_weights[i] = dataset.getDimensions()[1];
-//        }
-//        assert(current_offset == model_array_size);
-//        size_t mapping_size = 0;
-//        for (auto& size : dims){
-//            mapping_size += size;
-//        }
-//        assert(mapping_array_size == mapping_size);
     }
 
-//    indexing_int get_model_index(const double* point){
-//        /*
-//         * point: point in num_dim space.
-//         *
-//         * This function finds the corresponding model that should do the interpolation of this point.
-//         */
-//        // compute tree index
-//        encoding_int tree_index = compute_tree_index(point);
-//        // decode index
-//        auto start = std::begin(encoding_array);
-//        auto end = std::end(encoding_array);
-//        auto index = std::upper_bound(start, end, tree_index) - start;
-//        return indexing_array[index];
-//    }
-//
-//
-//    double* get_weights(const size_t index){
-//        // get model weights
-//        return &model_arrays[model_array_offsets[current_model_type_index]
-//                                + (index - offsets[current_model_type_index])
-//                                *model_class_weights[current_model_type_index]];
-//    }
-
-    const double* compute_cell_domain(const double* weights){
+    const double* get_cell_domain(const double* weights){
         // return pointer to the domain
         return &weights[(1<<num_dim)];
     }
-
 
     double interp_point(const double* point, const double* current_weights){;
         // Choose which interpolation scheme to use
@@ -588,7 +470,7 @@ private:
          */
         // transform point to domain [0,1]
         double x[num_dim];
-        const double* cell_domain = compute_cell_domain(weight);
+        const double* cell_domain = get_cell_domain(weight);
         for (size_t i = 0; i != num_dim; i++){
             x[i] = (point[i] - cell_domain[i]) / (cell_domain[num_dim + i] - cell_domain[i]);
         }
@@ -606,6 +488,5 @@ private:
     }
 
 };
-
 
 #endif //CPP_EMULATOR_EMULATOR_H

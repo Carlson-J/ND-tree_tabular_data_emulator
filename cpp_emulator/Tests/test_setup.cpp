@@ -86,7 +86,7 @@ TEST_CASE("Checkpoint solution", "[checkpoint]"){
     if (make_validation_set){
         // make validation set
         std::ofstream myfile;
-        myfile.open ("validation_data.txt");
+        myfile.open ("/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/validation_data.txt");
         for (size_t i = 0; i < NUM_POINTS; i++){
             myfile << std::scientific << std::setprecision(16) << sol[i] << '\n';
         }
@@ -94,7 +94,7 @@ TEST_CASE("Checkpoint solution", "[checkpoint]"){
     } else{
         // check if results are correct
         std::ifstream myfile;
-        myfile.open ("validation_data.txt");
+        myfile.open ("/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/validation_data.txt");
         for (size_t i = 0; i < NUM_POINTS; i++){
     //        double sol_true = x0[i] + x1[i] + x2[i] + 1.0;
     //        REQUIRE(std::fabs(sol[i] - sol_true) < EPS);
