@@ -30,9 +30,9 @@ public:
     /**
      * ND-Emulator. Loads a previously built/trained emulator.
      * @param filename Location of hdf5 file containing the emulator
-     * @param mphf_location Location of the Minimal Perfect Hashing function mapping
      */
-    Emulator(std::string filename, std::string mphf_location){
+    Emulator(std::string filename){
+        std::string mphf_location = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";
         load_emulator(filename);
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
