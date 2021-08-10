@@ -33,7 +33,7 @@ public:
      * @param filename Location of hdf5 file containing the emulator
      */
     Emulator(std::string filename){
-        std::string mphf_location = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";
+        std::string mphf_location = "./pthash.bin";
         load_emulator(filename);
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
@@ -97,20 +97,21 @@ public:
         std::vector<unsigned short int> local_cache_types;
         std::vector<unsigned short int> local_cache_depths;
         std::vector<size_t> input_mapping(num_points);
-        std::vector<unsigned short int[2]> depth_types(num_points);
+        std::vector<unsigned short int> depths(num_points);
+        std::vector<unsigned short int> types(num_points);
         // -- reserve set size
         local_cache_cell_index.reserve(INIT_CELL_CACHE_SIZE);
         local_cache_types.reserve(INIT_CELL_CACHE_SIZE);
         local_cache_depths.reserve(INIT_CELL_CACHE_SIZE);
 
         // Determine needed cells
-        #pragma omp parallel for default(none) shared(num_points, input_mapping, points, depth_types)
+        #pragma omp parallel for default(none) shared(num_points, input_mapping, points, depths, types)
         for (size_t i = 0; i < num_points; ++i) {
             double point[num_dim];
             for (size_t j = 0; j < num_dim; ++j) {
                 point[j] = points[j][i];
             }
-            input_mapping.at(i) = compute_cell_mapping(point, depth_types.at(i)[0],  depth_types.at(i)[1]);
+            input_mapping.at(i) = compute_cell_mapping(point, depths.at(i),  types.at(i));
         }
         // Determine unique cells needed
         size_t num_cells = 0;
@@ -125,42 +126,42 @@ public:
             }
             if (!found){
                 local_cache_cell_index.push_back(input_mapping.at(j));
-                local_cache_depths.push_back(depth_types.at(j)[0]);
-                local_cache_types.push_back(depth_types.at(j)[1]);
+                local_cache_depths.push_back(depths.at(j));
+                local_cache_types.push_back(types.at(j));
                 input_mapping.at(j) = num_cells;
                 num_cells++;
             }
         }
 
         // finish cache setup
-        std::vector<double[(1<<num_dim)+num_dim*2]> local_cache(num_cells);
+        std::vector<double> local_cache(num_cells*weight_size);
 
         // load needed cells
-        #pragma omp parallel for default(none) shared(num_cells, local_cache_cell_index, local_cache_depths, depth_types, local_cache, node_values, weight_offset, domain ,dx)
+        #pragma omp parallel for default(none) shared(num_cells, local_cache_cell_index, local_cache_depths, local_cache, node_values, weight_offset, domain ,dx)
         for (size_t i = 0; i < num_cells; ++i) {
             size_t local_cell_index[num_dim];
             un_global_indexing(local_cache_cell_index.at(i), local_cell_index);
             auto depth_diff = max_depth - local_cache_depths.at(i);
             for (size_t j = 0; j < (1<<num_dim); ++j) {
                 size_t point_index = compute_global_index_of_corner(local_cell_index, j, depth_diff);
-                local_cache.at(i)[j] = node_values[mphf(point_index)];
+                local_cache.at(i*weight_size+j) = node_values[mphf(point_index)];
             }
             // Load domain info into weights
             auto cell_edge_index_size = 1 << depth_diff;
             for (size_t j = 0; j != num_dim; ++j) {
-                local_cache.at(i)[weight_offset+j] = domain[j*2]+dx[j]*local_cell_index[j];
-                local_cache.at(i)[weight_offset+num_dim+j] = domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size);
+                local_cache.at(i*weight_size+weight_offset+j) = domain[j*2]+dx[j]*local_cell_index[j];
+                local_cache.at(i*weight_size+weight_offset+num_dim+j) = domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size);
             }
         }
 
         // Do interpolation on cells
-        #pragma omp parallel for default(none) shared(return_array, points, num_points, local_cache, input_mapping)
+        #pragma omp parallel for simd default(none) shared(return_array, points, num_points, local_cache, input_mapping)
         for (size_t i = 0; i < num_points; ++i) {
             double point[num_dim];
             for (size_t j = 0; j < num_dim; ++j) {
                 point[j] = points[j][i];
             }
-            return_array[i] = interp_point(point, local_cache.at(input_mapping.at(i)));
+            return_array[i] = nd_linear_interp(point, &(local_cache.at(weight_size*input_mapping.at(i))));//interp_point(point, &(local_cache.at(weight_size*input_mapping.at(i))));
         }
 
 //        // distribute points to interpolate among threads
