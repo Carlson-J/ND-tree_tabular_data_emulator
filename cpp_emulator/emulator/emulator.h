@@ -33,8 +33,7 @@ public:
      * @param filename Location of hdf5 file containing the emulator
      */
     Emulator(std::string filename){
-        std::string mphf_location = "./pthash.bin";
-        load_emulator(filename);
+        std::string mphf_location = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";        load_emulator(filename);
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
@@ -106,12 +105,17 @@ public:
         local_cache_depths.reserve(INIT_CELL_CACHE_SIZE);
         local_cache.reserve(INIT_CELL_CACHE_SIZE*weight_size);
         size_t num_cells = 0;
+        // -- initialize first element of each
+        local_cache_cell_index.push_back(0);
+        local_cache_types.push_back(0);
+        local_cache_depths.push_back(0);
+        local_cache.push_back(0);
 
         // Determine needed cells
         // auto start = omp_get_wtime();
-        #pragma omp parallel default(none) shared(local_cache_types,return_array,num_points, input_mapping, points, depths, types,num_cells, local_cache_cell_index, local_cache_depths, local_cache, node_values, weight_offset, domain ,dx) 
+        #pragma omp parallel default(none) shared(local_cache_types,return_array,num_points, input_mapping, points, depths, types,num_cells, local_cache_cell_index, local_cache_depths, local_cache, node_values, weight_offset, domain ,dx)
         {
-            #pragma omp for 
+            #pragma omp for
             for (size_t i = 0; i < num_points; ++i) {
                 double point[num_dim];
                 for (size_t j = 0; j < num_dim; ++j) {
@@ -125,7 +129,11 @@ public:
             // Determine unique cells needed
             #pragma omp single
             {
-                
+                // Remove initial value
+                local_cache_cell_index.pop_back();
+                local_cache_types.pop_back();
+                local_cache_depths.pop_back();
+                local_cache.pop_back();
                 for (size_t j = 0; j < num_points; j++){
                     bool found = false;
                     for (size_t i = 0; i < num_cells; ++i) {
@@ -144,9 +152,8 @@ public:
                     }
                 }
                 // finish cache setup
-                local_cache.reserve(num_cells*weight_size);
+                local_cache.resize(num_cells*weight_size);
             }
-
             // stop = omp_get_wtime();
             // std::cout << "Reducing time: " << stop-start << std::endl;
             // start = omp_get_wtime();
@@ -162,7 +169,7 @@ public:
                 }
                 // Load domain info into weights
                 auto cell_edge_index_size = 1 << depth_diff;
-                for (size_t j = 0; j != num_dim; ++j) {
+                for (size_t j = 0; j < num_dim; ++j) {
                     local_cache.at(i*weight_size+weight_offset+j) = domain[j*2]+dx[j]*local_cell_index[j];
                     local_cache.at(i*weight_size+weight_offset+num_dim+j) = domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size);
                 }
@@ -180,7 +187,7 @@ public:
                 }
                 return_array[i] = nd_linear_interp(point, &(local_cache.at(weight_size*input_mapping.at(i))));//interp_point(point, &(local_cache.at(weight_size*input_mapping.at(i))));
             }
-        }   
+        }
         // stop = omp_get_wtime();
         // std::cout << "interp time: " << stop-start << std::endl;
 
@@ -356,7 +363,7 @@ private:
 
     inline size_t compute_global_index(const size_t* cell_indices){
         size_t global_index = 0;
-        for (unsigned int i = 0; i != num_dim; ++i) {
+        for (unsigned int i = 0; i < num_dim; ++i) {
             global_index += cell_indices[i]*(cell_index_transform_weights[i]);
         }
         return global_index;
@@ -364,7 +371,7 @@ private:
 
     inline size_t trimmed_and_compute_global_index(size_t* cell_indices, const unsigned short int depth_diff){
         size_t global_index = 0;
-        for (unsigned int i = 0; i != num_dim; ++i) {
+        for (unsigned int i = 0; i < num_dim; ++i) {
             cell_indices[i] = ((cell_indices[i]>>depth_diff)<<depth_diff);
             global_index += cell_indices[i]*(cell_index_transform_weights[i]);
         }
@@ -375,7 +382,7 @@ private:
                                                  unsigned short int depth_diff){
         size_t cell_edge_size = (1<<depth_diff);
         size_t global_index = 0;
-        for (unsigned int i = 0; i != num_dim; ++i) {
+        for (unsigned int i = 0; i < num_dim; ++i) {
             if ((corner >> i) & 1){
                 global_index += (cell_indices[i] + cell_edge_size)*(point_index_transform_weights[i]);
             } else{
@@ -579,15 +586,15 @@ private:
         double x[num_dim];
         const double* cell_domain = get_cell_domain(weight);
         #pragma omp simd
-        for (size_t i = 0; i != num_dim; i++){
+        for (size_t i = 0; i < num_dim; i++){
             x[i] = (point[i] - cell_domain[i]) / (cell_domain[num_dim + i] - cell_domain[i]);
         }
         // apply weights
         double solution = 0;
         #pragma omp simd reduction(+:solution)
-        for (size_t i = 0; i != weight_offset; i++){
+        for (size_t i = 0; i < weight_offset; i++){
             double w = 1;
-            for (size_t j = 0; j != num_dim; j++){
+            for (size_t j = 0; j < num_dim; j++){
                 auto bit = (i >> j) & 1;
                 w *= bit == 0 ? (1 - x[j]) : x[j];
             }
