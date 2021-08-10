@@ -104,6 +104,7 @@ public:
         local_cache_depths.reserve(INIT_CELL_CACHE_SIZE);
 
         // Determine needed cells
+        auto start = omp_get_wtime();
         #pragma omp parallel for default(none) shared(num_points, input_mapping, points, depth_types)
         for (size_t i = 0; i < num_points; ++i) {
             double point[num_dim];
@@ -112,6 +113,9 @@ public:
             }
             input_mapping.at(i) = compute_cell_mapping(point, depth_types.at(i)[0],  depth_types.at(i)[1]);
         }
+        auto stop = omp_get_wtime();
+        std::cout << "Mapping time: " << stop-start << std::endl;
+        start = omp_get_wtime();
         // Determine unique cells needed
         size_t num_cells = 0;
         for (size_t j = 0; j < num_points; j++){
@@ -134,7 +138,9 @@ public:
 
         // finish cache setup
         std::vector<double[(1<<num_dim)+num_dim*2]> local_cache(num_cells);
-
+        stop = omp_get_wtime();
+        std::cout << "Reducing time: " << stop-start << std::endl;
+        start = omp_get_wtime();
         // load needed cells
         #pragma omp parallel for default(none) shared(num_cells, local_cache_cell_index, local_cache_depths, depth_types, local_cache, node_values, weight_offset, domain ,dx)
         for (size_t i = 0; i < num_cells; ++i) {
@@ -152,7 +158,9 @@ public:
                 local_cache.at(i)[weight_offset+num_dim+j] = domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size);
             }
         }
-
+        stop = omp_get_wtime();
+        std::cout << "Loading time: " << stop-start << std::endl;
+        start = omp_get_wtime();
         // Do interpolation on cells
         #pragma omp parallel for default(none) shared(return_array, points, num_points, local_cache, input_mapping)
         for (size_t i = 0; i < num_points; ++i) {
@@ -162,6 +170,8 @@ public:
             }
             return_array[i] = interp_point(point, local_cache.at(input_mapping.at(i)));
         }
+        stop = omp_get_wtime();
+        std::cout << "interp time: " << stop-start << std::endl;
 
 //        // distribute points to interpolate among threads
 //        #pragma omp parallel default(shared)    // NOLINT(openmp-use-default-none)
