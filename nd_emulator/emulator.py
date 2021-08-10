@@ -345,11 +345,14 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
     new_env = dict(os.environ)
     new_env['EMULATOR_NAME'] = emulator_name
     # -- Create build files
-    cmakeCmd = ["cmake", cpp_source_dir, tmp_dir, '-DCMAKE_BUILD_TYPE=RelWithDebInfo'] #RelWithDebInfo
+    current_dir = os.getcwd()
+    os.chdir(tmp_dir)
+    cmakeCmd = ["cmake", current_dir+'/'+cpp_source_dir, '.', '-DCMAKE_BUILD_TYPE=RelWithDebInfo'] #RelWithDebInfo
     subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell, env=new_env)
     # -- build C++ code
-    cmakeCmd = ["cmake", '--build', tmp_dir, '--target', 'ND_emulator_lib', '--verbose']
+    cmakeCmd = ["cmake", '--build', '.', '--target', 'ND_emulator_lib', '--verbose']
     subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell,  env=new_env)
+    os.chdir(current_dir)
     # -- move C++ library to install folder
     shutil.copy(tmp_dir + f'/{emulator_name}.so', save_directory + f'/{emulator_name}.so')
 
