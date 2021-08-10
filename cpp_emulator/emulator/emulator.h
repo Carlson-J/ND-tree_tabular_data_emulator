@@ -31,8 +31,7 @@ public:
      * @param filename Location of hdf5 file containing the emulator
      */
     Emulator(std::string filename){
-        std::string mphf_location = "./pthash.bin";        
-        load_emulator(filename);
+        std::string mphf_location = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";        load_emulator(filename);
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
@@ -321,18 +320,6 @@ private:
     size_t compute_cell_mapping(double* input_point, unsigned short int& depth, unsigned short int& type){
         size_t cell_index[num_dim];
         return compute_cell_mapping(input_point, depth, type, cell_index);
-    }
-
-    bool point_in_current_cell(const double* point_domain, const double* weights){
-        // determine if point is in current domain.
-        const double* cell_domain = get_cell_domain(weights);
-        for (size_t i = 0; i != num_dim; i++){
-            if ((point_domain[i] < cell_domain[i])
-            || (point_domain[i] > cell_domain[i+num_dim])){
-                return false;
-            }
-        }
-        return true;
     }
 
     void domain_transform(double* dim_array, size_t dim, size_t num_vars){
