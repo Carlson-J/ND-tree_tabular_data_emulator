@@ -92,77 +92,107 @@ public:
      */
     void interpolate(double** points, size_t num_points, double* return_array){
         // Setup cache
-        std::vector<size_t> local_cache_cell_index;
-        std::vector<unsigned short int> local_cache_types;
-        std::vector<unsigned short int> local_cache_depths;
+        std::vector<size_t> cached_cell_index;
+        std::vector<unsigned short int> cached_types;
+        std::vector<unsigned short int> cached_depths;
         std::vector<size_t> input_mapping(num_points);
-        std::vector<unsigned short int> depths(num_points);
-        std::vector<unsigned short int> types(num_points);
         std::vector<double> local_cache;
         // -- reserve set size
-        local_cache_cell_index.reserve(INIT_CELL_CACHE_SIZE);
-        local_cache_types.reserve(INIT_CELL_CACHE_SIZE);
-        local_cache_depths.reserve(INIT_CELL_CACHE_SIZE);
+        cached_cell_index.reserve(INIT_CELL_CACHE_SIZE);
+        cached_types.reserve(INIT_CELL_CACHE_SIZE);
+        cached_depths.reserve(INIT_CELL_CACHE_SIZE);
         local_cache.reserve(INIT_CELL_CACHE_SIZE*weight_size);
-        size_t num_cells = 0;
-        // -- initialize first element of each
-        local_cache_cell_index.push_back(0);
-        local_cache_types.push_back(0);
-        local_cache_depths.push_back(0);
-        local_cache.push_back(0);
+
+
 
         // Determine needed cells
         // auto start = omp_get_wtime();
-        #pragma omp parallel default(none) shared(local_cache_types,return_array,num_points, input_mapping, points, depths, types,num_cells, local_cache_cell_index, local_cache_depths, local_cache, node_values, weight_offset, domain ,dx)
+        #pragma omp parallel default(none) shared(cached_cell_index,cached_types,cached_depths, return_array,num_points, input_mapping, points, local_cache, node_values, weight_offset, domain ,dx)
         {
-            #pragma omp for
+            // setup thread cache and determine number of threads and their chunk sizes
+            auto num_threads = 1;//omp_get_num_threads();
+            auto block_size = num_points/num_threads;
+            block_size += num_points%num_threads != 0;
+            std::vector<size_t> local_mapping;
+            local_mapping.reserve(INIT_CELL_CACHE_SIZE);
+            std::vector<size_t> local_depth;
+            local_depth.reserve(INIT_CELL_CACHE_SIZE);
+            std::vector<size_t> local_type;
+            local_type.reserve(INIT_CELL_CACHE_SIZE);
+
+            // Map input points to their corresponding cell
+            #pragma omp for schedule(static,block_size)
             for (size_t i = 0; i < num_points; ++i) {
                 double point[num_dim];
                 for (size_t j = 0; j < num_dim; ++j) {
                     point[j] = points[j][i];
                 }
-                input_mapping.at(i) = compute_cell_mapping(point, depths.at(i),  types.at(i));
+                unsigned short int depth;
+                unsigned short int type;
+                size_t cell_index = compute_cell_mapping(point, depth,  type);
+                // determine if this is a new cell and save it if it is
+                bool found = false;
+                for (size_t j = 0; j < local_mapping.size(); ++j) {
+                    if (local_mapping.at(j) == cell_index){
+                        found = true;
+                        input_mapping.at(i) = j;
+                        break;
+                    }
+                }
+                if (!found){
+                    input_mapping.at(i) = local_mapping.size();
+                    local_mapping.push_back(cell_index);
+                    local_depth.push_back(depth);
+                    local_type.push_back(type);
+                }
             }
-            // auto stop = omp_get_wtime();
-            // std::cout << "Mapping time: " << stop-start << std::endl;
-            // start = omp_get_wtime();
-            // Determine unique cells needed
-            #pragma omp single
+            // Create global list of needed cells
+            #pragma omp critical
             {
-                // Remove initial value
-                local_cache_cell_index.pop_back();
-                local_cache_types.pop_back();
-                local_cache_depths.pop_back();
-                local_cache.pop_back();
-                for (size_t j = 0; j < num_points; j++){
+                // We consolidate all the local unique cells into a list of global unique cells.
+                // We change the local mapping array to hold the conversion to the local index to global index
+                for (size_t i = 0; i < local_mapping.size(); ++i) {
                     bool found = false;
-                    for (size_t i = 0; i < num_cells; ++i) {
-                        if (input_mapping.at(j) == local_cache_cell_index[i]){
-                            input_mapping.at(j) = i;
+                    for (size_t j = 0; j < cached_cell_index.size(); ++j) {
+                        if (cached_cell_index.at(j) == local_mapping.at(i)){
                             found = true;
+                            local_mapping.at(i) = j;
                             break;
                         }
                     }
                     if (!found){
-                        local_cache_cell_index.push_back(input_mapping.at(j));
-                        local_cache_depths.push_back(depths.at(j));
-                        local_cache_types.push_back(types.at(j));
-                        input_mapping.at(j) = num_cells;
-                        num_cells++;
+                        cached_cell_index.push_back(local_mapping.at(i));
+                        cached_types.push_back(local_type.at(i));
+                        cached_depths.push_back(local_depth.at(i));
+                        local_mapping.at(i) = cached_cell_index.size() - 1;
                     }
                 }
+            }
+            // Update cached input mapping indices
+            #pragma omp for schedule(static,block_size)
+            for (size_t i = 0; i < num_points; ++i) {
+                input_mapping.at(i) = local_mapping.at(input_mapping.at(i));
+            }
+
+            // auto stop = omp_get_wtime();
+            // std::cout << "Mapping time: " << stop-start << std::endl;
+            // start = omp_get_wtime();
+            // Determine unique cells needed
+
+            #pragma omp single
+            {
                 // finish cache setup
-                local_cache.resize(num_cells*weight_size);
+                local_cache.resize(cached_cell_index.size()*weight_size);
             }
             // stop = omp_get_wtime();
             // std::cout << "Reducing time: " << stop-start << std::endl;
             // start = omp_get_wtime();
             // load needed cells
             #pragma omp for
-            for (size_t i = 0; i < num_cells; ++i) {
+            for (size_t i = 0; i < cached_cell_index.size(); ++i) {
                 size_t local_cell_index[num_dim];
-                un_global_indexing(local_cache_cell_index.at(i), local_cell_index);
-                auto depth_diff = max_depth - local_cache_depths.at(i);
+                un_global_indexing(cached_cell_index.at(i), local_cell_index);
+                auto depth_diff = max_depth - cached_depths.at(i);
                 for (size_t j = 0; j < (1<<num_dim); ++j) {
                     size_t point_index = compute_global_index_of_corner(local_cell_index, j, depth_diff);
                     local_cache.at(i*weight_size+j) = node_values[mphf(point_index)];
@@ -178,13 +208,14 @@ public:
             // std::cout << "Loading time: " << stop-start << std::endl;
             // start = omp_get_wtime();
             // Do interpolation on cells
-            #pragma omp for
+            #pragma omp for schedule(static,block_size)
             for (size_t i = 0; i < num_points; ++i) {
                 double point[num_dim];
                 #pragma omp simd
                 for (size_t j = 0; j < num_dim; ++j) {
                     point[j] = points[j][i];
                 }
+//                size_t index = cached_cell_index.at(local_mapping.at(input_mapping.at(i)));
                 return_array[i] = nd_linear_interp(point, &(local_cache.at(weight_size*input_mapping.at(i))));//interp_point(point, &(local_cache.at(weight_size*input_mapping.at(i))));
             }
         }
