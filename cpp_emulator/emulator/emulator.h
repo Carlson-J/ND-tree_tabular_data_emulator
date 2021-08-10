@@ -99,80 +99,90 @@ public:
         std::vector<size_t> input_mapping(num_points);
         std::vector<unsigned short int> depths(num_points);
         std::vector<unsigned short int> types(num_points);
+        std::vector<double> local_cache;
         // -- reserve set size
         local_cache_cell_index.reserve(INIT_CELL_CACHE_SIZE);
         local_cache_types.reserve(INIT_CELL_CACHE_SIZE);
         local_cache_depths.reserve(INIT_CELL_CACHE_SIZE);
+        local_cache.reserve(INIT_CELL_CACHE_SIZE*weight_size);
+        size_t num_cells = 0;
 
         // Determine needed cells
-        auto start = omp_get_wtime();
-        #pragma omp parallel for default(none) shared(num_points, input_mapping, points, depths, types)
-        for (size_t i = 0; i < num_points; ++i) {
-            double point[num_dim];
-            for (size_t j = 0; j < num_dim; ++j) {
-                point[j] = points[j][i];
+        // auto start = omp_get_wtime();
+        #pragma omp parallel default(none) shared(local_cache_types,return_array,num_points, input_mapping, points, depths, types,num_cells, local_cache_cell_index, local_cache_depths, local_cache, node_values, weight_offset, domain ,dx) 
+        {
+            #pragma omp for 
+            for (size_t i = 0; i < num_points; ++i) {
+                double point[num_dim];
+                for (size_t j = 0; j < num_dim; ++j) {
+                    point[j] = points[j][i];
+                }
+                input_mapping.at(i) = compute_cell_mapping(point, depths.at(i),  types.at(i));
             }
-            input_mapping.at(i) = compute_cell_mapping(point, depths.at(i),  types.at(i));
-        }
-        auto stop = omp_get_wtime();
-        std::cout << "Mapping time: " << stop-start << std::endl;
-        start = omp_get_wtime();
-        // Determine unique cells needed
-        size_t num_cells = 0;
-        for (size_t j = 0; j < num_points; j++){
-            bool found = false;
+            // auto stop = omp_get_wtime();
+            // std::cout << "Mapping time: " << stop-start << std::endl;
+            // start = omp_get_wtime();
+            // Determine unique cells needed
+            #pragma omp single
+            {
+                
+                for (size_t j = 0; j < num_points; j++){
+                    bool found = false;
+                    for (size_t i = 0; i < num_cells; ++i) {
+                        if (input_mapping.at(j) == local_cache_cell_index[i]){
+                            input_mapping.at(j) = i;
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found){
+                        local_cache_cell_index.push_back(input_mapping.at(j));
+                        local_cache_depths.push_back(depths.at(j));
+                        local_cache_types.push_back(types.at(j));
+                        input_mapping.at(j) = num_cells;
+                        num_cells++;
+                    }
+                }
+                // finish cache setup
+                local_cache.reserve(num_cells*weight_size);
+            }
+
+            // stop = omp_get_wtime();
+            // std::cout << "Reducing time: " << stop-start << std::endl;
+            // start = omp_get_wtime();
+            // load needed cells
+            #pragma omp for
             for (size_t i = 0; i < num_cells; ++i) {
-                if (input_mapping.at(j) == local_cache_cell_index[i]){
-                    input_mapping.at(j) = i;
-                    found = true;
-                    break;
+                size_t local_cell_index[num_dim];
+                un_global_indexing(local_cache_cell_index.at(i), local_cell_index);
+                auto depth_diff = max_depth - local_cache_depths.at(i);
+                for (size_t j = 0; j < (1<<num_dim); ++j) {
+                    size_t point_index = compute_global_index_of_corner(local_cell_index, j, depth_diff);
+                    local_cache.at(i*weight_size+j) = node_values[mphf(point_index)];
+                }
+                // Load domain info into weights
+                auto cell_edge_index_size = 1 << depth_diff;
+                for (size_t j = 0; j != num_dim; ++j) {
+                    local_cache.at(i*weight_size+weight_offset+j) = domain[j*2]+dx[j]*local_cell_index[j];
+                    local_cache.at(i*weight_size+weight_offset+num_dim+j) = domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size);
                 }
             }
-            if (!found){
-                local_cache_cell_index.push_back(input_mapping.at(j));
-                local_cache_depths.push_back(depths.at(j));
-                local_cache_types.push_back(types.at(j));
-                input_mapping.at(j) = num_cells;
-                num_cells++;
+            // stop = omp_get_wtime();
+            // std::cout << "Loading time: " << stop-start << std::endl;
+            // start = omp_get_wtime();
+            // Do interpolation on cells
+            #pragma omp for
+            for (size_t i = 0; i < num_points; ++i) {
+                double point[num_dim];
+                #pragma omp simd
+                for (size_t j = 0; j < num_dim; ++j) {
+                    point[j] = points[j][i];
+                }
+                return_array[i] = nd_linear_interp(point, &(local_cache.at(weight_size*input_mapping.at(i))));//interp_point(point, &(local_cache.at(weight_size*input_mapping.at(i))));
             }
-        }
-
-        // finish cache setup
-        std::vector<double> local_cache(num_cells*weight_size);
-        stop = omp_get_wtime();
-        std::cout << "Reducing time: " << stop-start << std::endl;
-        start = omp_get_wtime();
-        // load needed cells
-        #pragma omp parallel for default(none) shared(num_cells, local_cache_cell_index, local_cache_depths, local_cache, node_values, weight_offset, domain ,dx)
-        for (size_t i = 0; i < num_cells; ++i) {
-            size_t local_cell_index[num_dim];
-            un_global_indexing(local_cache_cell_index.at(i), local_cell_index);
-            auto depth_diff = max_depth - local_cache_depths.at(i);
-            for (size_t j = 0; j < (1<<num_dim); ++j) {
-                size_t point_index = compute_global_index_of_corner(local_cell_index, j, depth_diff);
-                local_cache.at(i*weight_size+j) = node_values[mphf(point_index)];
-            }
-            // Load domain info into weights
-            auto cell_edge_index_size = 1 << depth_diff;
-            for (size_t j = 0; j != num_dim; ++j) {
-                local_cache.at(i*weight_size+weight_offset+j) = domain[j*2]+dx[j]*local_cell_index[j];
-                local_cache.at(i*weight_size+weight_offset+num_dim+j) = domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size);
-            }
-        }
-        stop = omp_get_wtime();
-        std::cout << "Loading time: " << stop-start << std::endl;
-        start = omp_get_wtime();
-        // Do interpolation on cells
-        #pragma omp parallel for simd default(none) shared(return_array, points, num_points, local_cache, input_mapping)
-        for (size_t i = 0; i < num_points; ++i) {
-            double point[num_dim];
-            for (size_t j = 0; j < num_dim; ++j) {
-                point[j] = points[j][i];
-            }
-            return_array[i] = nd_linear_interp(point, &(local_cache.at(weight_size*input_mapping.at(i))));//interp_point(point, &(local_cache.at(weight_size*input_mapping.at(i))));
-        }
-        stop = omp_get_wtime();
-        std::cout << "interp time: " << stop-start << std::endl;
+        }   
+        // stop = omp_get_wtime();
+        // std::cout << "interp time: " << stop-start << std::endl;
 
 //        // distribute points to interpolate among threads
 //        #pragma omp parallel default(shared)    // NOLINT(openmp-use-default-none)
@@ -243,7 +253,8 @@ private:
     std::shared_mutex cell_cache_range;
 
     void compute_cartesian_indices(const double *point, size_t *cartesian_indices) const {
-        for (size_t i = 0; i != num_dim; i++){
+        #pragma omp simd
+        for (size_t i = 0; i < num_dim; i++){
             // restrict the point to fall within the real domain (as opposed to the index domain)
             double p = std::max(std::min(point[i], domain[i * 2 + 1]), domain[i * 2 + 0]);
             // compute cartesian index
@@ -567,11 +578,13 @@ private:
         // transform point to domain [0,1]
         double x[num_dim];
         const double* cell_domain = get_cell_domain(weight);
+        #pragma omp simd
         for (size_t i = 0; i != num_dim; i++){
             x[i] = (point[i] - cell_domain[i]) / (cell_domain[num_dim + i] - cell_domain[i]);
         }
         // apply weights
         double solution = 0;
+        #pragma omp simd reduction(+:solution)
         for (size_t i = 0; i != weight_offset; i++){
             double w = 1;
             for (size_t j = 0; j != num_dim; j++){
