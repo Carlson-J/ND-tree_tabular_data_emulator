@@ -13,8 +13,6 @@
 #include <memory>
 #include <algorithm>
 #include <cmath>
-#include <mutex>
-#include <shared_mutex>
 #include <omp.h>
 //#include <morton-nd/mortonND_BMI2.h>
 //#include <morton-nd/mortonND_LUT.h>
@@ -33,7 +31,8 @@ public:
      * @param filename Location of hdf5 file containing the emulator
      */
     Emulator(std::string filename){
-        std::string mphf_location = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";        load_emulator(filename);
+        std::string mphf_location = "./pthash.bin";        
+        load_emulator(filename);
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
@@ -103,19 +102,12 @@ public:
         local_cache_cell_index.reserve(INIT_CELL_CACHE_SIZE);
         local_cache_types.reserve(INIT_CELL_CACHE_SIZE);
         local_cache_depths.reserve(INIT_CELL_CACHE_SIZE);
-        local_cache.reserve(INIT_CELL_CACHE_SIZE*weight_size);
         size_t num_cells = 0;
-        // -- initialize first element of each
-        local_cache_cell_index.push_back(0);
-        local_cache_types.push_back(0);
-        local_cache_depths.push_back(0);
-        local_cache.push_back(0);
 
         // Determine needed cells
-        // auto start = omp_get_wtime();
         #pragma omp parallel default(none) shared(local_cache_types,return_array,num_points, input_mapping, points, depths, types,num_cells, local_cache_cell_index, local_cache_depths, local_cache, node_values, weight_offset, domain ,dx)
         {
-            #pragma omp for
+            #pragma omp for simd
             for (size_t i = 0; i < num_points; ++i) {
                 double point[num_dim];
                 for (size_t j = 0; j < num_dim; ++j) {
@@ -123,17 +115,10 @@ public:
                 }
                 input_mapping.at(i) = compute_cell_mapping(point, depths.at(i),  types.at(i));
             }
-            // auto stop = omp_get_wtime();
-            // std::cout << "Mapping time: " << stop-start << std::endl;
-            // start = omp_get_wtime();
             // Determine unique cells needed
             #pragma omp single
             {
                 // Remove initial value
-                local_cache_cell_index.pop_back();
-                local_cache_types.pop_back();
-                local_cache_depths.pop_back();
-                local_cache.pop_back();
                 for (size_t j = 0; j < num_points; j++){
                     bool found = false;
                     for (size_t i = 0; i < num_cells; ++i) {
@@ -154,9 +139,6 @@ public:
                 // finish cache setup
                 local_cache.resize(num_cells*weight_size);
             }
-            // stop = omp_get_wtime();
-            // std::cout << "Reducing time: " << stop-start << std::endl;
-            // start = omp_get_wtime();
             // load needed cells
             #pragma omp for
             for (size_t i = 0; i < num_cells; ++i) {
@@ -174,50 +156,16 @@ public:
                     local_cache.at(i*weight_size+weight_offset+num_dim+j) = domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size);
                 }
             }
-            // stop = omp_get_wtime();
-            // std::cout << "Loading time: " << stop-start << std::endl;
-            // start = omp_get_wtime();
             // Do interpolation on cells
             #pragma omp for
             for (size_t i = 0; i < num_points; ++i) {
                 double point[num_dim];
-                #pragma omp simd
                 for (size_t j = 0; j < num_dim; ++j) {
                     point[j] = points[j][i];
                 }
                 return_array[i] = nd_linear_interp(point, &(local_cache.at(weight_size*input_mapping.at(i))));//interp_point(point, &(local_cache.at(weight_size*input_mapping.at(i))));
             }
         }
-        // stop = omp_get_wtime();
-        // std::cout << "interp time: " << stop-start << std::endl;
-
-//        // distribute points to interpolate among threads
-//        #pragma omp parallel default(shared)    // NOLINT(openmp-use-default-none)
-//        {
-//            double local_weights[weight_size];
-//            bool first_iteration = true;
-//            std::cout << "Thread: " << omp_get_thread_num() << std::endl;
-//            #pragma omp for schedule(auto)
-//            for (unsigned int i = 0; i < num_points; i++){
-//                // load points into local array
-//                double point_domain[num_dim];
-//                double point[num_dim];
-//                for (size_t j = 0; j != num_dim; j++){
-//                    point_domain[j] = points[j][i];
-//                    point[j] = point_domain[j];
-//                    // Do any needed domain transforms
-//                    domain_transform(&point_domain[j], j, 1);
-//                }
-//                // Check if current loaded cell is the correct cell
-//                if (first_iteration || !point_in_current_cell(point_domain, local_weights)){
-//                    // load cell
-//                    first_iteration = false;
-//                    load_cell(point_domain, local_weights);
-//                }
-//                // do interpolation
-//                return_array[i] = interp_point(point, local_weights);
-//            }
-//        }
     }
 
 private:
@@ -244,124 +192,20 @@ private:
             true                    // minimal
     > pthash_type;
     pthash_type mphf;
-    // data for point array
-    indexing_int point_cache_indices[POINT_CACHE_SIZE];
-    double point_cache_values[POINT_CACHE_SIZE];
-    size_t point_cache_start;
-    size_t point_cache_end;
-    std::mutex point_cache_edit;
-    std::shared_mutex point_cache_range;
-    // data for cell array
-    indexing_int cell_cache_indices[CELL_CACHE_SIZE];
-    double cell_cache_values[CELL_CACHE_SIZE*((1<<num_dim)+num_dim*2)];
-    size_t cell_cache_start;
-    size_t cell_cache_end;
-    std::mutex cell_cache_edit;
-    std::shared_mutex cell_cache_range;
 
     void compute_cartesian_indices(const double *point, size_t *cartesian_indices) const {
-        #pragma omp simd
         for (size_t i = 0; i < num_dim; i++){
             // restrict the point to fall within the real domain (as opposed to the index domain)
             double p = std::max(std::min(point[i], domain[i * 2 + 1]), domain[i * 2 + 0]);
             // compute cartesian index
-            cartesian_indices[i] = size_t((p - domain[i * 2 + 0]) / dx[i]);
+            cartesian_indices[i] = static_cast<size_t>((p - domain[i * 2 + 0]) / dx[i]);
             // If the index is outside the index domain of the emulator round to the nearest cell.
-            cartesian_indices[i] = std::max(size_t(0), cartesian_indices[i]);
+            cartesian_indices[i] = std::max(static_cast<size_t>(0), cartesian_indices[i]);
             cartesian_indices[i] = std::min(max_index, cartesian_indices[i]);
         }
     }
 
-    void update_shared_cell_array(unsigned short int type, size_t cell_index, const double* cell_weights){
-        // Update shared cell cache with local array
-        cell_cache_edit.lock();    // Lock ability to edit array sections not covered by [start, end)
-        // Make sure it was not added since you last checked and before you got the lock
-        for (size_t i = cell_cache_start; i != cell_cache_end; i=(i+1)%CELL_CACHE_SIZE) {
-            if (cell_index == cell_cache_indices[i]){
-                cell_cache_edit.unlock();
-                return;
-            }
-        }
-        // load vars into mutable section of tables. Note that A[end%N] is always available to be mutated, as start!=end
-        cell_cache_indices[cell_cache_end] = cell_index;
-        for (size_t i = 0; i < weight_size; ++i) {
-            cell_cache_values[cell_cache_end*weight_size + i] = cell_weights[i];
-        }
-        // precompute the new indices
-        auto new_end = (cell_cache_end + 1) % CELL_CACHE_SIZE;
-        auto new_start = cell_cache_start;
-        if (new_start == new_end){
-            new_start = (new_start + 1) % CELL_CACHE_SIZE;
-        }
-        // update indices
-        cell_cache_range.lock();    // Lock ranges while the editing thread updates it
-        cell_cache_end = new_end;
-        cell_cache_start = new_start;
-        cell_cache_range.unlock();  // release range lock
-        cell_cache_edit.unlock();    // release edit lock
-    }
-
-    bool try_local_cell_load(const size_t& cell_index, double* local_weights){
-        // determine if this cell is loaded. If it is, copy weights into local array
-        // Load cell from local shared array if it is there, if not, load from global array and add it to shared array
-        // TODO: switch arrays based on type
-        // Check if cell is already loaded
-        cell_cache_range.lock_shared();
-        for (size_t i = cell_cache_start; i != cell_cache_end; i=(i+1)%CELL_CACHE_SIZE) {
-            if (cell_index == cell_cache_indices[i]){
-                for (size_t j = 0; j < weight_size; ++j) {
-                    local_weights[j] = cell_cache_values[i*weight_size+j];
-                }
-                cell_cache_range.unlock_shared();
-                return true;
-            }
-        }
-        cell_cache_range.unlock_shared();
-        return false;
-    }
-
-    void load_point(const unsigned short int type, const size_t point_index, double& cell_weight){
-        // Load point from local shared array if it is there, if not, load from global array and add it to shared array
-        // TODO: switch arrays based on type
-        // Check if point is already loaded
-        point_cache_range.lock_shared();
-        for (size_t i = point_cache_start; i != point_cache_end; i=(i+1)%POINT_CACHE_SIZE) {
-            if (point_index == point_cache_indices[i]){
-                cell_weight = point_cache_values[i];
-                point_cache_range.unlock_shared();
-                return;
-            }
-        }
-        point_cache_range.unlock_shared();
-        // If not found, load the element from global memory
-        cell_weight = node_values[mphf(point_index)];
-        // update shared point array
-        point_cache_edit.lock();    // Lock ability to edit array sections not covered by [start, end)
-        // Make sure it was not added since you last checked and before you got the lock
-        for (size_t i = point_cache_start; i != point_cache_end; i=(i+1)%POINT_CACHE_SIZE) {
-            if (point_index == point_cache_indices[i]){
-                point_cache_edit.unlock();
-                return;
-            }
-        }
-        // load vars into mutable section of tables. Note that A[end%N] is always available to be mutated, as start!=end
-        point_cache_values[point_cache_end] = cell_weight;
-        point_cache_indices[point_cache_end] = point_index;
-        // precompute the new indices
-        auto new_end = (point_cache_end + 1) % POINT_CACHE_SIZE;
-        auto new_start = point_cache_start;
-        if (new_start == new_end){
-            new_start = (new_start + 1) % POINT_CACHE_SIZE;
-        }
-        // update indices
-        point_cache_range.lock();    // Lock ranges while the editing thread updates it
-        point_cache_end = new_end;
-        point_cache_start = new_start;
-        point_cache_range.unlock();  // release range lock
-        point_cache_edit.unlock();    // release edit lock
-    }
-
-    inline size_t compute_global_index(const size_t* cell_indices){
+    size_t compute_global_index(const size_t* cell_indices){
         size_t global_index = 0;
         for (unsigned int i = 0; i < num_dim; ++i) {
             global_index += cell_indices[i]*(cell_index_transform_weights[i]);
@@ -369,7 +213,7 @@ private:
         return global_index;
     }
 
-    inline size_t trimmed_and_compute_global_index(size_t* cell_indices, const unsigned short int depth_diff){
+    size_t trimmed_and_compute_global_index(size_t* cell_indices, const unsigned short int depth_diff){
         size_t global_index = 0;
         for (unsigned int i = 0; i < num_dim; ++i) {
             cell_indices[i] = ((cell_indices[i]>>depth_diff)<<depth_diff);
@@ -378,7 +222,7 @@ private:
         return global_index;
     }
 
-    inline size_t compute_global_index_of_corner(const size_t* cell_indices, unsigned int corner,
+    size_t compute_global_index_of_corner(const size_t* cell_indices, unsigned int corner,
                                                  unsigned short int depth_diff){
         size_t cell_edge_size = (1<<depth_diff);
         size_t global_index = 0;
@@ -390,41 +234,6 @@ private:
             }
         }
         return global_index;
-    }
-
-    void load_cell(double* input, double* cell_weights){
-        /*
-         * Determines the cell needed for a given input and loads the cell weights into the cell_weights vector.
-         * Updates the shared cell weight array.
-         * Can be called in parallel.
-         */
-        // determine needed cells
-        unsigned short int depth;
-        unsigned short int type;
-        size_t local_cell_index[num_dim];
-        auto cell_index = compute_cell_mapping(input, depth, type, local_cell_index);
-        auto depth_diff = max_depth - depth;
-        // Check if cell is loaded into shared local array and load it if it is.
-        if (!try_local_cell_load(cell_index, cell_weights)){
-            // determine points needed and load them into the weigh vector
-            const size_t num_points = (1<<num_dim);
-            for (unsigned int i = 0; i < num_points; ++i) { // i is also the location in the weight vector
-                // determine global index of point
-                size_t point_index = compute_global_index_of_corner(local_cell_index, i, depth_diff);
-                // Load point
-                load_point(type, point_index,cell_weights[i]);
-            }
-            // load domain information into weight vector
-            // lower and upper corner
-            auto cell_edge_index_size = 1 << depth_diff;
-            for (size_t i = 0; i != num_dim; ++i) {
-                cell_weights[weight_offset+i] = domain[i*2]+dx[i]*local_cell_index[i];
-                cell_weights[weight_offset+num_dim+i] = domain[i*2]+dx[i]*(local_cell_index[i] + cell_edge_index_size);
-            }
-            // update shared cell array with weights
-            update_shared_cell_array(type, cell_index, cell_weights);
-        }
-
     }
 
     pthash_type load_mphf(std::string location){
@@ -448,7 +257,7 @@ private:
         return f;
     }
 
-    inline void un_global_indexing(size_t global_index, size_t local_index[num_dim]){
+    void un_global_indexing(size_t global_index, size_t local_index[num_dim]){
         for (unsigned int i = 0; i < num_dim; ++i) {
             local_index[i] = global_index / cell_index_transform_weights[i];
             global_index = global_index % cell_index_transform_weights[i];
