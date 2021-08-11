@@ -6,6 +6,7 @@
 
 #define POINT_INPUTS double* x, double* y, double* z
 #define POINT_GROUPING double* points[3] = {x,y,z}
+#define POINT_GROUPING_SINGLE double points[3] = {x[0],y[0],z[0]}
 #define POINT_ARG x, y, z
 
 // extern "C" {
@@ -28,6 +29,10 @@ extern "C" {
    void ND_TREE_EMULATOR_NAME_INTERPOLATE(void*& emulator, POINT_INPUTS, size_t& num_points, double* return_array) {
        POINT_GROUPING;
        ((Emulator<ND_TREE_EMULATOR_TYPE> *)emulator)->interpolate(points, num_points, return_array);
+   }
+   void ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE(void*& emulator, POINT_INPUTS, double* return_array) {
+       POINT_GROUPING_SINGLE;
+       ((Emulator<ND_TREE_EMULATOR_TYPE> *)emulator)->interpolate(points, return_array[0]);
    }
    void ND_TREE_EMULATOR_NAME_FREE(void*& emulator){
 

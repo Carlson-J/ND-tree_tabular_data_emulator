@@ -67,7 +67,21 @@ public:
 
         // load minimal perfect hash function
         mphf = load_mphf(mphf_location);
+
+        // allocate enough size for each thread to have its own storage
+        weight_cache.resize(omp_get_max_threads()*weight_size);
     }
+
+    void interpolate(const double* point, double& return_value){
+        // get thread id
+        size_t thread_id = omp_get_thread_num();
+        // Check if we are already in correct cell.
+        if (!point_in_current_cell(point, thread_id)){
+            update_current_cell(point, thread_id);
+        }
+        return_value = nd_linear_interp(point, &(weight_cache.at(thread_id*weight_size)));
+    }
+
 
     /**
      * The interpolation is done using an emulator that has been computed offline and loaded when
@@ -202,6 +216,7 @@ public:
     }
 
 private:
+    std::vector<double> weight_cache;
     size_t weight_size = (1<<num_dim)+num_dim*2;
     size_t max_index;
     size_t max_depth;
@@ -225,6 +240,40 @@ private:
             true                    // minimal
     > pthash_type;
     pthash_type mphf;
+
+    void update_current_cell(const double* input_point, size_t i){
+        // determine index
+        unsigned short int depth;
+        unsigned short int type;
+        size_t cell_indices[num_dim];
+        size_t cell_index = compute_cell_mapping(input_point, depth,  type, cell_indices);
+
+        // determine which cell it is in
+        auto depth_diff = max_depth - depth;
+        for (size_t j = 0; j < (1<<num_dim); ++j) {
+            size_t point_index = compute_global_index_of_corner(cell_indices, j, depth_diff);
+            weight_cache.at(i*weight_size+j) = node_values[mphf(point_index)];
+        }
+        // Load domain info into weights
+        auto cell_edge_index_size = 1 << depth_diff;
+        for (size_t j = 0; j < num_dim; ++j) {
+            weight_cache.at(i*weight_size+weight_offset+j) = domain[j*2]+dx[j]*cell_indices[j];
+            weight_cache.at(i*weight_size+weight_offset+num_dim+j) = domain[j*2]+dx[j]*(cell_indices[j] + cell_edge_index_size);
+        }
+
+    }
+
+    bool point_in_current_cell(const double* point_domain, size_t thread_id){
+        const double* current_cell_domain = get_cell_domain(&(weight_cache.at(thread_id*weight_size)));
+        // determine if point is in current domain.
+        for (size_t i = 0; i<num_dim; i++){
+            if ((point_domain[i] < current_cell_domain[i])
+            || (point_domain[i] > current_cell_domain[i+num_dim])){
+                return false;
+            }
+        }
+        return true;
+    }
 
     void compute_cartesian_indices(const double *point, size_t *cartesian_indices) const {
         for (size_t i = 0; i < num_dim; i++){
@@ -298,7 +347,7 @@ private:
     }
 
     // compute the depth, type, global_index and cell_index for the given input_point
-    size_t compute_cell_mapping(double* input_point, unsigned short int& depth, unsigned short int& type, size_t* cell_index){
+    size_t compute_cell_mapping(const double* input_point, unsigned short int& depth, unsigned short int& type, size_t* cell_index){
         // Compute index
         compute_cartesian_indices(input_point, cell_index);
         // unpack depth and type from char array
@@ -317,7 +366,7 @@ private:
     }
 
     // compute the depth, type, global_index and cell_index for the given input_point
-    size_t compute_cell_mapping(double* input_point, unsigned short int& depth, unsigned short int& type){
+    size_t compute_cell_mapping(const double* input_point, unsigned short int& depth, unsigned short int& type){
         size_t cell_index[num_dim];
         return compute_cell_mapping(input_point, depth, type, cell_index);
     }
