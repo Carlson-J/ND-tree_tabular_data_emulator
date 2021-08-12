@@ -330,7 +330,7 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
     assert (os.path.isfile(save_directory + '/' + emulator_name + "_cpp_params.h"))
     # create C++ shared library to accompany it
     # -- Create tmp build directory (the old one will be removed)
-    tmp_dir = "./tmp"
+    tmp_dir = save_directory+"/tmp"
     if os.path.isdir(tmp_dir):
         shutil.rmtree(tmp_dir)
     os.makedirs(tmp_dir)
