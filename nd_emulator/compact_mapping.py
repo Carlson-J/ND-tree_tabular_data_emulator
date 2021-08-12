@@ -44,6 +44,7 @@ def save_header_file(folder_path, emulator_name, indexing_type, num_dims, num_mo
         file.write("#undef ND_TREE_EMULATOR_TYPE\n")
         file.write("#undef ND_TREE_EMULATOR_NAME_SETUP\n")
         file.write("#undef ND_TREE_EMULATOR_NAME_INTERPOLATE\n")
+        file.write("#undef ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE\n")
         file.write("#undef ND_TREE_EMULATOR_NAME_FREE\n")
         file.write("#define ND_TREE_EMULATOR_TYPE ")
         file.write(f"{type_header_conversion(indexing_type)}, ")
@@ -55,6 +56,7 @@ def save_header_file(folder_path, emulator_name, indexing_type, num_dims, num_mo
         # create function name stuff
         file.write(f"#define ND_TREE_EMULATOR_NAME_SETUP {emulator_name}_emulator_setup\n")
         file.write(f"#define ND_TREE_EMULATOR_NAME_INTERPOLATE {emulator_name}_emulator_interpolate\n")
+        file.write(f"#define ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE {emulator_name}_emulator_interpolate_single\n")
         file.write(f"#define ND_TREE_EMULATOR_NAME_FREE {emulator_name}_emulator_free\n")
 
 
