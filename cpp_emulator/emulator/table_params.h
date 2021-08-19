@@ -1,9 +1,10 @@
 #undef ND_TREE_EMULATOR_TYPE
 #undef ND_TREE_EMULATOR_NAME_SETUP
 #undef ND_TREE_EMULATOR_NAME_INTERPOLATE
+#undef ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE
 #undef ND_TREE_EMULATOR_NAME_FREE
-#define ND_TREE_EMULATOR_TYPE unsigned long, 1, 3, 2555297, 8388608
-#define ND_TREE_EMULATOR_NAME_SETUP test_v2_sparse_emulator_setup
-#define ND_TREE_EMULATOR_NAME_INTERPOLATE test_v2_sparse_emulator_interpolate
-#define ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE test_v2_sparse_emulator_interpolate_single
-#define ND_TREE_EMULATOR_NAME_FREE test_v2_sparse_emulator_free
+#define ND_TREE_EMULATOR_TYPE unsigned char, 1, 3, 58, 32
+#define ND_TREE_EMULATOR_NAME_SETUP sro_logenergy_max_err_0_emulator_setup
+#define ND_TREE_EMULATOR_NAME_INTERPOLATE sro_logenergy_max_err_0_emulator_interpolate
+#define ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE sro_logenergy_max_err_0_emulator_interpolate_single
+#define ND_TREE_EMULATOR_NAME_FREE sro_logenergy_max_err_0_emulator_free

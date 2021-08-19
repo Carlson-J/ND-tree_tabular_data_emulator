@@ -6,11 +6,18 @@
 #include "../pthash/include/pthash.hpp"
 #include "../pthash/src/util.hpp"  // for functions distinct_keys and check
 #include "string"
+#include <cstdlib>
 
-int main() {
+int main(int argc, char* argv[]) {
     using namespace pthash;
-    std::string file_location = "./test_v2_sparse_table.hdf5";
-    size_t num_points = 2555297;
+    // check that an input was given
+    if (argc != 4){
+        std::cerr << "Both the location of the hdf5 file for the table and the output name must be given. Only " << argc - 1 << " arguments where given" << std::endl;
+        return -1;
+    }
+    std::string file_location = argv[1];
+    std::string output_filename = argv[2];
+    size_t num_points = atoll(argv[3]);
     std::vector<unsigned long> indexing(num_points);
     std::vector<double> node_values(num_points);
     std::vector<double> new_node_values(num_points);
@@ -71,15 +78,8 @@ int main() {
         new_node_values[new_index] = node_values[i];
     }
 
-    // Print out new array
-    std::cout << "\nPrint out new array:\n";
-    for (uint64_t i = 0; i != 10; ++i) {
-        std::cout << "i " << i << ": " << new_node_values[i] << '\n';
-    }
-
     /* Serialize the data structure to a file. */
     std::cout << "serializing the function to disk..." << std::endl;
-    std::string output_filename("./pthash.bin");
     essentials::save(f, output_filename.c_str());
 
     {
@@ -92,13 +92,7 @@ int main() {
         }
     }
 
-//    // Save new order of values for mapping array
-//    for (uint64_t i = 0; i != num_points; ++i) {
-//        if (i == 0){
-//            std::cout << "val at i0: " << node_values[f(indexing[i])] << std::endl;
-//        }
-//        new_node_values[i] = node_values[f(indexing[i])];
-//    }
+    // Save in hdf5 table file
     mapping_group.createDataSet<double>("node_values_encoded", HighFive::DataSpace::From(new_node_values));
     dataset = mapping_group.getDataSet("node_values_encoded");
     dataset.write(new_node_values);

@@ -31,7 +31,7 @@ public:
      * @param filename Location of hdf5 file containing the emulator
      */
     Emulator(std::string filename){
-        std::string mphf_location = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";        load_emulator(filename);
+        std::string mphf_location = "./pthash.bin";        load_emulator(filename);
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
@@ -478,6 +478,38 @@ private:
                 w *= bit == 0 ? (1 - x[j]) : x[j];
             }
             solution += weight[i] * w;
+        }
+        return solution;
+    }
+
+    template<size_t derivative_dimension>
+    double nd_linear_interp(const double* point, const double* weight, double& dydx0){
+        /*
+         * do an ND-linear interpolation at the points in X given model weight values.
+         * https://math.stackexchange.com/a/1342377
+         *
+         */
+        // transform point to domain [0,1]
+        double x[num_dim];
+        const double* cell_domain = get_cell_domain(weight);
+        #pragma omp simd
+        for (size_t i = 0; i < num_dim; i++){
+            x[i] = (point[i] - cell_domain[i]) / (cell_domain[num_dim + i] - cell_domain[i]);
+        }
+        // apply weights
+        double solution = 0;
+        dydx0 = 0;
+        #pragma omp simd reduction(+:solution)
+        for (size_t i = 0; i < weight_offset; i++){
+            double w = 1;
+            for (size_t j = 0; (j < num_dim)  && (j != derivative_dimension); j++){
+                auto bit = (i >> j) & 1;
+                w *= bit == 0 ? (1 - x[j]) : x[j];
+            }
+            double dy_weight = ((i >> derivative_dimension) & 1) == 0 ? -1.0 : 1.0;
+            double y_weight  = ((i >> derivative_dimension) & 1) == 0 ? (1 - x[j]) : x[j];
+            solution += weight[i] * w * y_weight;
+            dydx0 += weight[i] * w * dy_weight;
         }
         return solution;
     }
