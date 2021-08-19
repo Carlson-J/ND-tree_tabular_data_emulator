@@ -352,7 +352,14 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
     # -- build C++ code
     cmakeCmd = ["cmake", '--build', '.', '--target', 'ND_emulator_lib', '--verbose']
     subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell,  env=new_env)
+    cmakeCmd = ["cmake", '--build', '.', '--target', 'make_mapping', '--verbose']
+    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell,  env=new_env)
+    # -- build mapping
     os.chdir(current_dir)
+    with h5py.File(save_directory + '/' + emulator_name + "_table.hdf5") as file:
+        num_points = file["/mapping/indexing"].shape[0]
+    cmakeCmd = [tmp_dir+"/make_mapping",save_directory + '/' + emulator_name + "_table.hdf5" , save_directory + '/' + emulator_name +"_mapping.bin", f'{num_points}']
+    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell,  env=new_env)
     # -- move C++ library to install folder
     shutil.copy(tmp_dir + f'/{emulator_name}.so', save_directory + f'/{emulator_name}.so')
 
