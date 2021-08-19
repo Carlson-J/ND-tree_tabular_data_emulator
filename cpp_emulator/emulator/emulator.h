@@ -31,7 +31,7 @@ public:
      * @param filename Location of hdf5 file containing the emulator
      */
     Emulator(std::string filename){
-        std::string mphf_location = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug//pthash.bin";        load_emulator(filename);
+        std::string mphf_location = "./pthash.bin";        load_emulator(filename);
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
