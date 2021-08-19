@@ -31,7 +31,7 @@ public:
      * @param filename Location of hdf5 file containing the emulator
      */
     Emulator(std::string filename){
-        std::string mphf_location = "./pthash.bin";        load_emulator(filename);
+        std::string mphf_location = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug//pthash.bin";        load_emulator(filename);
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
@@ -80,6 +80,17 @@ public:
             update_current_cell(point, thread_id);
         }
         return_value = nd_linear_interp(point, &(weight_cache.at(thread_id*weight_size)));
+    }
+
+    template<size_t derivative_dim>
+    void interpolate(const double* point, double& return_value, double& derivative){
+        // get thread id
+        size_t thread_id = omp_get_thread_num();
+        // Check if we are already in correct cell.
+        if (!point_in_current_cell(point, thread_id)){
+            update_current_cell(point, thread_id);
+        }
+        return_value = nd_linear_interp<derivative_dim>(point, &(weight_cache.at(thread_id*weight_size)), derivative);
     }
 
 
@@ -507,7 +518,7 @@ private:
                 w *= bit == 0 ? (1 - x[j]) : x[j];
             }
             double dy_weight = ((i >> derivative_dimension) & 1) == 0 ? -1.0 : 1.0;
-            double y_weight  = ((i >> derivative_dimension) & 1) == 0 ? (1 - x[j]) : x[j];
+            double y_weight  = ((i >> derivative_dimension) & 1) == 0 ? (1 - x[derivative_dimension]) : x[derivative_dimension];
             solution += weight[i] * w * y_weight;
             dydx0 += weight[i] * w * dy_weight;
         }

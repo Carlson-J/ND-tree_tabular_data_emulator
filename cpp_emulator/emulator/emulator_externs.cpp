@@ -35,6 +35,10 @@ extern "C" {
        POINT_GROUPING_SINGLE;
        ((Emulator<ND_TREE_EMULATOR_TYPE> *)emulator)->interpolate(points, return_array);
    }
+   void ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE_DX1(void*& emulator, POINT_INPUTS_SINGLE, double& return_array, double& dy_dx1) {
+       POINT_GROUPING_SINGLE;
+       ((Emulator<ND_TREE_EMULATOR_TYPE> *)emulator)->interpolate<1>(points, return_array, dy_dx1);
+   }
    void ND_TREE_EMULATOR_NAME_FREE(void*& emulator){
 
        // std::cout << "emulator to delete: " << emulator << std::endl;
