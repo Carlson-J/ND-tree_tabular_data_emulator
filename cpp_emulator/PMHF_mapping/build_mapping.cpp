@@ -93,8 +93,9 @@ int main(int argc, char* argv[]) {
     }
 
     // Save in hdf5 table file
-    mapping_group.createDataSet<double>("node_values_encoded", HighFive::DataSpace::From(new_node_values));
-    dataset = mapping_group.getDataSet("node_values_encoded");
+    if (mapping_group.exist("node_values_encoded")){
+        mapping_group.createDataSet<double>("node_values_encoded", HighFive::DataSpace::From(new_node_values));
+    }    dataset = mapping_group.getDataSet("node_values_encoded");
     dataset.write(new_node_values);
 
     // Test to make sure it worked.

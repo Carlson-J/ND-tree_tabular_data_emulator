@@ -109,6 +109,78 @@ TEST_CASE("Checkpoint solution", "[checkpoint]"){
 
 }
 
+TEST_CASE("Checkpoint solution serial", "[checkpoint:serial]"){
+    // Load the emulator
+//#include "test_v2_sparse_cpp_params.h"
+
+    std::string table_loc = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/test_v2_sparse_table.hdf5";
+    auto *emulator = new Emulator<unsigned long, 1, 3, 2555297, 8388608>(table_loc);
+    // create 4d data for interpolation
+    const double EPS = 1e-12;
+    const size_t NUM_POINTS = 10000;
+    const size_t NUM_DIM = 3;
+    double temp_min = -3.0;
+    double temp_max = 2.45;
+    double rho_min = 2.0;
+    double rho_max = 16;
+    double ye_min = 0.05;
+    double ye_max = 0.66;
+    double x0[NUM_POINTS];
+    double x1[NUM_POINTS];
+    double x2[NUM_POINTS];
+    double dx[NUM_DIM] = {(ye_max - ye_min)/(NUM_POINTS+10),
+                          (temp_max - temp_min)/(NUM_POINTS+10),
+                          (rho_max - rho_min)/(NUM_POINTS+10)};
+    for (unsigned int i = 0; i < NUM_POINTS; ++i) {
+        x0[i] = ye_min + dx[0]*(i+1);
+        x1[i] = temp_min + dx[1]*(i+1);
+        x2[i] = rho_min + dx[2]*(i+1);
+    }
+    // Create array of pointers to point to each array
+    double* points[NUM_DIM] = {x0, x1, x2};
+    // Create array for solution
+    double sol[NUM_POINTS] = {0};
+    double sol2[NUM_POINTS] = {0};
+    double sol2_dy[NUM_POINTS] = {0};
+    // do interpolation on 4d data
+    for (int i = 0; i < NUM_POINTS; ++i) {
+        double point[NUM_DIM];
+        for (int j = 0; j < NUM_DIM; j++){
+            point[j] = points[j][i];
+        }
+        emulator->interpolate(point, sol[i]);
+        emulator->interpolate<1>(point, sol2[i], sol2_dy[i]);
+    }
+    // change below to make validation set
+    bool make_validation_set = false;
+    if (make_validation_set){
+        // make validation set
+        std::ofstream myfile;
+        myfile.open ("/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/validation_data.txt");
+        for (size_t i = 0; i < NUM_POINTS; i++){
+            myfile << std::scientific << std::setprecision(16) << sol[i] << '\n';
+        }
+        myfile.close();
+    } else{
+        // check if results are correct
+        std::ifstream myfile;
+        myfile.open ("/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/validation_data.txt");
+        for (size_t i = 0; i < NUM_POINTS; i++){
+            //        double sol_true = x0[i] + x1[i] + x2[i] + 1.0;
+            //        REQUIRE(std::fabs(sol[i] - sol_true) < EPS);
+            double sol_true = 0;
+            std::string word;
+            char* pEnd;
+            myfile >> word;
+            sol_true = std::strtod(word.c_str(), &pEnd);
+            REQUIRE(std::fabs(sol[i] - sol_true) < EPS*std::fabs(sol_true));
+            REQUIRE(std::fabs(sol2[i] - sol_true) < EPS*std::fabs(sol_true));
+        }
+        myfile.close();
+    }
+
+}
+
 
 // Need to update all of these ***********************
 //TEST_CASE("Load Emulator"){
