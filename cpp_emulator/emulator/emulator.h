@@ -70,7 +70,17 @@ public:
         mphf = load_mphf(mphf_location);
 
         // allocate enough size for each thread to have its own storage
-        weight_cache.resize(omp_get_max_threads()*weight_size);
+        #pragma omp parallel default(none) shared(weight_caches)
+        {
+            #pragma omp single
+            {
+                weight_caches.resize(omp_get_num_threads());
+            }
+            // Use first touch and non-contiguous array to reduce cache conflicts and between threads and allocate vectors
+            // close to where the cores will be.
+            size_t thread_id = omp_get_thread_num();
+            weight_caches.at(thread_id).resize(weight_size);
+        }
     }
 
     void interpolate(const double* point, double& return_value){
@@ -80,7 +90,7 @@ public:
         if (!point_in_current_cell(point, thread_id)){
             update_current_cell(point, thread_id);
         }
-        return_value = nd_linear_interp(point, &(weight_cache.at(thread_id*weight_size)));
+        return_value = nd_linear_interp(point, &(weight_caches.at(thread_id).at(0)));
     }
 
     template<size_t derivative_dim>
@@ -91,7 +101,7 @@ public:
         if (!point_in_current_cell(point, thread_id)){
             update_current_cell(point, thread_id);
         }
-        return_value = nd_linear_interp<derivative_dim>(point, &(weight_cache.at(thread_id*weight_size)), derivative);
+        return_value = nd_linear_interp<derivative_dim>(point, &(weight_caches.at(thread_id).at(0)), derivative);
     }
 
 
@@ -228,7 +238,7 @@ public:
     }
 
 private:
-    std::vector<double> weight_cache;
+    std::vector<std::vector<double>> weight_caches;
     size_t weight_size = (1<<num_dim)+num_dim*2;
     size_t max_index;
     size_t max_depth;
@@ -264,19 +274,19 @@ private:
         auto depth_diff = max_depth - depth;
         for (size_t j = 0; j < (1<<num_dim); ++j) {
             size_t point_index = compute_global_index_of_corner(cell_indices, j, depth_diff);
-            weight_cache.at(i*weight_size+j) = node_values[mphf(point_index)];
+            weight_caches.at(i).at(j) = node_values[mphf(point_index)];
         }
         // Load domain info into weights
         auto cell_edge_index_size = 1 << depth_diff;
         for (size_t j = 0; j < num_dim; ++j) {
-            weight_cache.at(i*weight_size+weight_offset+j) = domain[j*2]+dx[j]*cell_indices[j];
-            weight_cache.at(i*weight_size+weight_offset+num_dim+j) = domain[j*2]+dx[j]*(cell_indices[j] + cell_edge_index_size);
+            weight_caches.at(i).at(weight_offset+j) = domain[j*2]+dx[j]*cell_indices[j];
+            weight_caches.at(i).at(weight_offset+num_dim+j) = domain[j*2]+dx[j]*(cell_indices[j] + cell_edge_index_size);
         }
 
     }
 
     bool point_in_current_cell(const double* point_domain, size_t thread_id){
-        const double* current_cell_domain = get_cell_domain(&(weight_cache.at(thread_id*weight_size)));
+        const double* current_cell_domain = get_cell_domain(&(weight_caches.at(thread_id).at(0)));
         // determine if point is in current domain.
         for (size_t i = 0; i<num_dim; i++){
             if ((point_domain[i] < current_cell_domain[i])
