@@ -23,8 +23,8 @@
 // }
 
 extern "C" {
-   void ND_TREE_EMULATOR_NAME_SETUP(const char* filename, void*& emulator) {
-       emulator = (void*)(new Emulator<ND_TREE_EMULATOR_TYPE>(filename));
+   void ND_TREE_EMULATOR_NAME_SETUP(const char* filename, const char* mapping_filename, void*& emulator) {
+       emulator = (void*)(new Emulator<ND_TREE_EMULATOR_TYPE>(filename, mapping_filename));
        // std::cout << "emulator: " << emulator << std::endl;
    }
    void ND_TREE_EMULATOR_NAME_INTERPOLATE(void*& emulator, POINT_INPUTS, size_t& num_points, double* return_array) {

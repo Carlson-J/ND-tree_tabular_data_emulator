@@ -52,7 +52,8 @@ TEST_CASE("Checkpoint solution", "[checkpoint]"){
 //#include "test_v2_sparse_cpp_params.h"
 
     std::string table_loc = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/test_v2_sparse_table.hdf5";
-    auto *emulator = new Emulator<unsigned long, 1, 3, 2555297, 8388608>(table_loc);
+    std::string mapping_loc = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";
+    auto *emulator = new Emulator<unsigned long, 1, 3, 2555297, 8388608>(table_loc, mapping_loc);
     // create 4d data for interpolation
     const double EPS = 1e-12;
     const size_t NUM_POINTS = 10000;
@@ -114,7 +115,8 @@ TEST_CASE("Checkpoint solution serial", "[checkpoint:serial]"){
 //#include "test_v2_sparse_cpp_params.h"
 
     std::string table_loc = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/test_v2_sparse_table.hdf5";
-    auto *emulator = new Emulator<unsigned long, 1, 3, 2555297, 8388608>(table_loc);
+    std::string mapping_loc = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";
+    auto *emulator = new Emulator<unsigned long, 1, 3, 2555297, 8388608>(table_loc, mapping_loc);
     // create 4d data for interpolation
     const double EPS = 1e-12;
     const size_t NUM_POINTS = 10000;

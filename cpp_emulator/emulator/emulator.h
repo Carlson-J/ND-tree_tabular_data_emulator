@@ -30,8 +30,9 @@ public:
      * ND-Emulator. Loads a previously built/trained emulator.
      * @param filename Location of hdf5 file containing the emulator
      */
-    Emulator(std::string filename){
-        std::string mphf_location = "./pthash.bin";        load_emulator(filename);
+    Emulator(std::string filename, std::string mapping_location){
+        std::string mphf_location = mapping_location;
+        load_emulator(filename);
         // do domain transform
         for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
