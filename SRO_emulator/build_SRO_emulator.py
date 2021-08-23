@@ -11,6 +11,7 @@ Build the emulator for the SRO EOS
 
 if __name__ == "__main__":
     # ------- Edit the details here ------- #
+    skip_table_creation = True
 
     cpp_source_dir = '../cpp_emulator'
     # Load table"../tables/SRO_training_rho1025_temp513_ye129_gitM6eba730_20210624.h5"
@@ -18,7 +19,6 @@ if __name__ == "__main__":
     vars, domain = load_SRO_EOS(EOS_file)
     spacing = ['linear', 'linear', 'linear']      # We will do the transform ahead of time.
 
-    skip_table_creation = True
 
     relative_error_dict = {
         'Abar': True,
@@ -49,17 +49,17 @@ if __name__ == "__main__":
     assert(len(sys.argv) == 2)
     var = sys.argv[1]
     # errors = np.logspace(-10, -5, N)[::-1]
-    errors = [0.1]
+    errors = [-1.]
     # sizes = np.zeros([N, num_vars])
 
     # Directory where the emulator should be saved. Will be created if it does note exist.
-    save_directory = f"./emulators_lin/{var}/"
+    save_directory = f"./emulators_lin_full/{var}/"
     for i in range(N):
         # for j, key in enumerate(vars.keys()):
         # Name of emulator. This will be used to construct the name used when calling the compiled version and
         # -- and determining the filenames of the various saved files.
         # -- It should not contain spaces, nasty special characters or a file extension
-        emulator_name = f"sro_{var}_max_err_{i}"  #linear_err{errors[i]:0.2e}"
+        emulator_name = f"sro_{var}_max_err"  #linear_err{errors[i]:0.2e}"
 
         # Specify model types
         # -- add each model type to the list in the format of a dict {'type': name, ...}
@@ -71,7 +71,7 @@ if __name__ == "__main__":
         # -- can choose is 3.
         max_depth = 9  # as much refinement as needed.
         error_threshold = errors[i]
-        max_test_points = 100       # The max number of points to eval in a cell when estimating the error
+        max_test_points = 1       # The max number of points to eval in a cell when estimating the error
         relative_error = relative_error_dict[var]      # Whether or not the error threshold is absolute or relative error
 
         if not skip_table_creation:

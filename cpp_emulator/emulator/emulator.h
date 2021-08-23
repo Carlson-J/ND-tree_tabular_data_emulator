@@ -511,15 +511,19 @@ private:
         double solution = 0;
         dydx0 = 0;
         #pragma omp simd reduction(+:solution,dydx0)
-        for (size_t i = 0; i < weight_offset; i++){
+        for (size_t i = 0; i < weight_offset; i++) {
             double w = 1;
-            for (size_t j = 0; (j < num_dim); j++){  //&& (j != derivative_dimension)
+            for (size_t j = 0; (j < derivative_dimension); j++) {  //&& (j != derivative_dimension)
                 auto bit = (i >> j) & 1;
                 w *= bit == 0 ? (1 - x[j]) : x[j];
             }
-            solution += weight[i] * w;
-            // modify for derivative
-            dydx0 += weight[i] * w / (((i >> derivative_dimension) & 1) == 0 ? -(1 - x[derivative_dimension]) : x[derivative_dimension]);
+            for (size_t j = derivative_dimension+1; (j < num_dim); j++) {  //&& (j != derivative_dimension)
+                auto bit = (i >> j) & 1;
+                w *= bit == 0 ? (1 - x[j]) : x[j];
+            }
+            auto bit = (i >> derivative_dimension) & 1;
+            dydx0 += weight[i] * w * ( bit == 0 ? -1 : 1);
+            solution += weight[i] * w * (bit == 0 ? (1 - x[derivative_dimension]) : x[derivative_dimension]);
         }
         // transform derivative back
         dydx0 /= static_cast<double>(cell_domain[num_dim + derivative_dimension] - cell_domain[derivative_dimension]);
