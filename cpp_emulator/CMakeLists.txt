@@ -1,8 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
 set(CMAKE_CXX_STANDARD 17)
-<<<<<<< HEAD
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -g -Wall -Wextra -fopenmp")
-=======
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O3 -fopenmp -march=native -mtune=native -g -Wall -Wextra -no-inline-max-size -no-inline-max-total-size") #-fopenmp -march=native
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -march=native -fopenmp -g -Wall -Wextra ") #-fopenmp -march=native
 
@@ -11,7 +8,6 @@ add_executable(make_mapping PMHF_mapping/build_mapping.cpp)
 target_link_libraries(make_mapping HighFive)
 
 project(profiler)
->>>>>>> memory_optimizations
 add_compile_options(-DHIGHFIVE_USE_BOOST=OFF)
 
 add_subdirectory(HighFive)
