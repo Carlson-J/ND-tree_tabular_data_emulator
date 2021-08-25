@@ -15,7 +15,7 @@ Save directory:
 if __name__ == "__main__":
     # ------- Edit the details here ------- #
     # If the emulator has already been made, but you want to regenerate the C++ library set to True
-    skip_emulator_creation = True
+    skip_emulator_creation = False
     # Directory where the emulator should be saved. Will be created if it does note exist.
     save_directory = "./profiling_v2_sparse"
     cpp_source_dir = './cpp_emulator'
