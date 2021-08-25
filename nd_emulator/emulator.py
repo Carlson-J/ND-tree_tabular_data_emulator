@@ -1,7 +1,7 @@
 import numpy as np
 from .domain_functions import transform_domain, transform_point
 from .dtree import DTree
-from .compact_mapping import convert_tree
+from .compact_mapping import convert_tree, compute_global_index, unpack_global_index, MODEL_CLASS_TYPES
 from .model_classes import nd_linear_model
 from .compact_mapping import CompactMapping, save_compact_mapping, load_compact_mapping
 from .parameter_struct import Parameters
@@ -15,7 +15,7 @@ import h5py
 
 
 def build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, max_test_points=100,
-                   relative_error=False, expand_index_domain=False, return_tree=False, error_type='max'):
+                   relative_error=False, expand_index_domain=True, return_tree=False, error_type='max'):
     """
     Creates an emulator using ND-tree decomposition over the given domain. The refinement of the tree is carried out
     until a specified error threshold is reached.
@@ -92,9 +92,7 @@ class Emulator:
         :param compact_mapping: (CompactMapping)
         """
         self.encoding_array = compact_mapping.encoding_array
-        self.index_array = compact_mapping.index_array
-        self.offsets = compact_mapping.offsets
-        self.model_arrays = compact_mapping.model_arrays
+        self.point_map = compact_mapping.point_map
         self.params = compact_mapping.params
 
         # precompute some things
@@ -128,37 +126,64 @@ class Emulator:
                 raise ValueError
         return sol
 
-    def find_model_index(self, point):
+    def unpack_encoding(self, index):
         """
-        Find the model index for a point
-        :param point: (array) [x0, x1,...]
-        :return:
+        Unpack the encoding array to get the depth and model type
+        :param index:
+        :return: depth, model type
         """
-        tree_index = self.compute_tree_index(point)
-        # find index in encoding array
-        index = np.searchsorted(self.encoding_array, tree_index, side='right')
-        return self.index_array[index]
+        c = ord(self.encoding_array[index])
+        depth = c & 0b00001111
+        type = c >> 4
+        return depth, type
 
     def find_model(self, point):
         """
         Find the model weights and the index of model class array it is
         :param point: (array) [x0, x1,...]
-        :return: (dict) model
+        :return: (array) model weights, (int) model type
         """
-        model_index = self.find_model_index(point)
-        # Determine which type of model it is by index
-        if len(self.offsets) > 1:
-            model_list_index = next((x for x, val in enumerate(self.offsets[1:]) if val > model_index),
-                                    len(self.offsets) - 1)
-        else:
-            model_list_index = 0
-        model_weights = self.model_arrays[model_list_index][model_index - self.offsets[model_list_index]]
-        return model_weights, model_list_index
+        # compute cartesian index
+        cart_indices = self.compute_cartesian_index(point)
+        # determine model type and location
+        global_index = compute_global_index(cart_indices, self.params.dims - 1)  # the cells are 1 smaller in each dim
+        depth, model_type = self.unpack_encoding(global_index)
+        # compute owning cell's index
+        depth_diff = np.zeros(self.num_dims, dtype=int)
+        for i in range(self.num_dims):
+            depth_diff[i] = self.params.max_depth - depth
+            cart_indices[i] = (cart_indices[i] >> depth_diff[i]) << depth_diff[i]
+        # get model weights
+        # TODO: deal with the extra sign factor for the log transform model class
+        weights = np.zeros(2 ** self.num_dims + 2*self.num_dims)
+        # -- Go over each corner of the hyper-cube
+        for i in range(2 ** self.num_dims):
+            point_coords = cart_indices.copy()
+            for j, d in enumerate(f'{i:0{self.num_dims}b}'[::-1]):
+                point_coords[j] += 2**depth_diff[j] * int(d)
+            # add domain coords
+            if i == 0:
+                weights[-2*self.num_dims:-self.num_dims] = self.compute_domain_from_indices(point_coords)
+            elif i == 2 ** self.num_dims - 1:
+                weights[-self.num_dims:] = self.compute_domain_from_indices(point_coords)
+            global_index = compute_global_index(point_coords, self.params.dims)
+            weights[i] = self.point_map[f'{global_index}']
+        return weights, model_type
 
-    def compute_tree_index(self, point):
+    def compute_domain_from_indices(self, point_coords):
         """
-        Compute the tree index-space index for a given point.
-        The point should be within the domain of the root node.
+        Compute (x0,x1,..,xN) based on the index
+        :param point_coords:
+        :return:
+        """
+        output = np.zeros(self.num_dims)
+        for i in range(self.num_dims):
+            output[i] = self.domain[i][0] + self.dx[i]*point_coords[i]
+        return output
+
+    def compute_cartesian_index(self, point):
+        """
+        Compute the cartesian indices
         :param point: (array) the location of the point
         :return: (int)
         """
@@ -168,25 +193,20 @@ class Emulator:
         for i in range(self.num_dims):
             point_new[i] = np.max([np.min([point_new[i], self.domain[i][1]]), self.domain[i][0]])
         # compute cartesian coordinate on regular grid of points in the index domain
-        coords_cart = np.zeros(self.num_dims, dtype=int)
+        coords_cart = np.zeros(self.num_dims, dtype=np.uint)
         for i in range(len(point_new)):
             coords_cart[i] = int(np.floor((point_new[i] - self.index_domain[i][0]) / self.dx[i]))
             # if the right most point would index into a cell that is not their move it back a cell.
             if coords_cart[i] == 2 ** self.params.max_depth:
                 coords_cart[i] -= 1
-        # convert to tree index
-        index = 0
-        for i in range(self.params.max_depth):
-            for j in range(self.num_dims):
-                index = (index << 1) | ((coords_cart[::-1][j] >> (self.params.max_depth - i - 1)) & 1)
-        return index
+        return coords_cart
 
     def get_compact_mapping(self):
         """
         Package and return compact emulator
         :return:
         """
-        return CompactMapping(self.encoding_array, self.index_array, self.offsets, self.model_arrays, self.params)
+        return CompactMapping(self.encoding_array, self.point_map, self.params)
 
     def save(self, folder_path, emulator_name, return_file_size=False):
         """
@@ -200,47 +220,21 @@ class Emulator:
 
     def get_cell_locations(self, include_model_type=False):
         """
-        Compute the locations of all the boundaries of the cells.
+        Compute the locations of all the corner of the cells.
         :param include_model_type: (bool) return model type at each point as well.
         :return:
         """
-        # ** This is a dumb brute force way of doing it **
-        # get list of all possible node points
-        ranges = [np.linspace(*self.params.index_domain[i], 2 ** self.params.max_depth + 1) for i in range(self.num_dims)]
-        X = np.meshgrid(*ranges, indexing='ij')
-        Y = np.array([x.flatten() for x in X])
-        if include_model_type:
-            model_types = []
-            junk, index = self.find_model(Y[:, 0])
-            model_types.append([self.params.model_classes[index]['type'], self.params.model_classes[index]['transforms']])
-
-        # node points are ones where moving across the point on any axis changed the domain you ar in
-        node_points = [Y[:, 0]]
-        for i in range(1, len(Y[0, :]) - 1):
-            is_node = False
-            model_type = None
-            for j in range(self.num_dims):
-                p1 = Y[:, i].copy()
-                p1[j] += self.dx[j] / 2.
-                p2 = Y[:, i].copy()
-                p2[j] -= self.dx[j] / 2.
-                if self.find_model_index(p1) != self.find_model_index(p2):
-                    if include_model_type:
-                        junk, index = self.find_model(p1)
-                        model_type = [self.params.model_classes[index]['type'], self.params.model_classes[index]['transforms']]
-                    is_node = True
-                    break
-            if is_node:
-                if include_model_type:
-                    model_types.append(model_type)
-                node_points.append(Y[:, i])
-        node_points.append(Y[:, -1])
+        assert(self.num_dims == 2)
+        points = []
+        values = []
+        model_types = []
+        for key in self.point_map.keys():
+            points.append(unpack_global_index(int(key), self.params.dims))
+            model_types.append(self.unpack_encoding(int(key)))
 
         if include_model_type:
-            junk, index = self.find_model(Y[:, -1])
-            model_types.append([self.params.model_classes[index]['type'], self.params.model_classes[index]['transforms']])
-            return np.array(node_points), model_types
-        return np.array(node_points)
+            return np.array(points), model_types
+        return np.array(points)
 
 
 class EmulatorCpp:
@@ -273,6 +267,9 @@ class EmulatorCpp:
                 ('encoding_array', ctypes.POINTER(encoding_type)),
                 ('indexing_array', ctypes.POINTER(indexing_type)),
                 ('model_arrays', ctypes.POINTER(ctypes.c_double)),
+                ('current_cell_domain', ctypes.POINTER(ctypes.c_double)),
+                ('current_weights', ctypes.POINTER(ctypes.c_double)),
+                ('current_model_type_index', ctypes.c_size_t),
             ]
 
         # Load C++ emulator
@@ -348,10 +345,20 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
     new_env = dict(os.environ)
     new_env['EMULATOR_NAME'] = emulator_name
     # -- Create build files
-    cmakeCmd = ["cmake", '-S', cpp_source_dir, '-B', tmp_dir, '-DCMAKE_BUILD_TYPE=RelWithDebInfo']
+    current_dir = os.getcwd()
+    os.chdir(tmp_dir)
+    cmakeCmd = ["cmake", current_dir+'/'+cpp_source_dir, '.', '-DCMAKE_BUILD_TYPE=RelWithDebInfo'] #RelWithDebInfo
     subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell, env=new_env)
     # -- build C++ code
-    cmakeCmd = ["cmake", '--build', tmp_dir, '--target', 'ND_emulator_lib', '--verbose']
+    cmakeCmd = ["cmake", '--build', '.', '--target', 'ND_emulator_lib', '--verbose']
+    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell,  env=new_env)
+    cmakeCmd = ["cmake", '--build', '.', '--target', 'make_mapping', '--verbose']
+    subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell,  env=new_env)
+    # -- build mapping
+    os.chdir(current_dir)
+    with h5py.File(save_directory + '/' + emulator_name + "_table.hdf5") as file:
+        num_points = file["/mapping/indexing"].shape[0]
+    cmakeCmd = [tmp_dir+"/make_mapping",save_directory + '/' + emulator_name + "_table.hdf5" , save_directory + '/' + emulator_name +"_mapping.bin", f'{num_points}']
     subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell,  env=new_env)
     # -- move C++ library to install folder
     shutil.copy(tmp_dir + f'/{emulator_name}.so', save_directory + f'/{emulator_name}.so')

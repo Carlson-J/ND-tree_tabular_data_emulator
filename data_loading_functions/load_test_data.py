@@ -9,7 +9,7 @@ def load_test_data(shape, domain):
         being the number of dimensions.
     :param domain: (2d-array) [[x0_lo, x0_hi], [x1_lo, x1_hi],... [xN_lo, xN_hi]] the upper and lower bound of each
         dimension.
-    :return:
+    :return: dict{'f': data}
     """
     domain = np.array(domain)
     # check inputs

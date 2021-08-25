@@ -5,154 +5,399 @@
 #ifndef CPP_EMULATOR_EMULATOR_H
 #define CPP_EMULATOR_EMULATOR_H
 
-#include <highfive/H5File.hpp>
-#include "string"
+#include "../HighFive/include/highfive/H5File.hpp"
+#include "../pthash/include/pthash.hpp"
+#include <string>
 #include "H5Cpp.h"
 #include "constants.h"
 #include <memory>
 #include <algorithm>
 #include <cmath>
-#include <morton-nd/mortonND_BMI2.h>
-#include <morton-nd/mortonND_LUT.h>
+#include <omp.h>
+//#include <morton-nd/mortonND_BMI2.h>
+//#include <morton-nd/mortonND_LUT.h>
+//
+//using MortonND = mortonnd::MortonND;
+#define POINT_CACHE_SIZE 4
+#define CELL_CACHE_SIZE 100
+#define INIT_CELL_CACHE_SIZE 128
 
-template <typename encoding_int, typename indexing_int, size_t num_model_classes, size_t num_dim, size_t num_models,
-        size_t model_array_size>
+template <typename indexing_int, size_t num_model_classes, size_t num_dim,
+        size_t mapping_array_size, size_t encoding_array_size>
 class Emulator {
 public:
-    Emulator(std::string filename){
-        std::cout << "Loading emulator" << std::endl;
+    /**
+     * ND-Emulator. Loads a previously built/trained emulator.
+     * @param filename Location of hdf5 file containing the emulator
+     */
+    Emulator(std::string filename, std::string mapping_location){
+        std::string mphf_location = mapping_location;
         load_emulator(filename);
         // do domain transform
-        for (size_t i = 0; i < num_dim; i++){
+        for (size_t i = 0; i != num_dim; i++){
             domain_transform(&domain[i*2], i, 2);
             domain_transform(&index_domain[i*2], i, 2);
         }
         // compute dx
-        for (size_t i = 0; i < num_dim; i++){
-            dx[i] = (index_domain[i*2 + 1] - index_domain[i*2 + 0]) / (pow(2, max_depth));
+        for (size_t i = 0; i != num_dim; i++){
+            dx[i] = (index_domain[i*2 + 1] - index_domain[i*2 + 0]) / (double)(1 << max_depth);
         }
         // compute other derived quantities
         weight_offset = 1<<num_dim; //std::pow(2, num_dim);
+        num_cell_corners = weight_offset;
         // compute max index
-        max_index = (1<<max_depth) - 1; //size_t(pow(2, max_depth) - 1);
-        // Set current cell to the first cell, morton index 0, by giving the lower part of the domain
-        double starting_cell[num_dim];
-        for (size_t i = 0; i < num_dim; i++){
-            starting_cell[i] = domain[i*2];
+        max_index = (1<<max_depth) - 1;
+        // Compute weights for transforming cartesian point index into 1d dim
+        for (size_t i = 0; i != num_dim; ++i) {
+            point_index_transform_weights[i] = 1;
         }
-        update_current_cell(starting_cell);
+        for (size_t i = 0; i < num_dim -1; i++){
+            for (size_t j = i + 1; j < num_dim; j++){
+                point_index_transform_weights[i] *= dims[j];
+            }
+        }
+        // Compute weights for transforming cartesian cell index into 1d dim
+        for (size_t i = 0; i != num_dim; ++i) {
+            cell_index_transform_weights[i] = 1;
+        }
+        for (size_t i = 0; i < num_dim -1; i++){
+            for (size_t j = i + 1; j < num_dim; j++){
+                cell_index_transform_weights[i] *= dims[j] - 1;  // -1 since this is a cell index instead of a point index.
+            }
+        }
+
+        // load minimal perfect hash function
+        mphf = load_mphf(mphf_location);
+
+        // allocate enough size for each thread to have its own storage
+        #pragma omp parallel default(none) shared(weight_caches)
+        {
+            #pragma omp single
+            {
+                weight_caches.resize(omp_get_num_threads());
+            }
+            // Use first touch and non-contiguous array to reduce cache conflicts and between threads and allocate vectors
+            // close to where the cores will be.
+            size_t thread_id = omp_get_thread_num();
+            weight_caches.at(thread_id).resize(weight_size);
+        }
     }
 
+    void interpolate(const double* point, double& return_value){
+        // get thread id
+        size_t thread_id = omp_get_thread_num();
+        // Check if we are already in correct cell.
+        if (!point_in_current_cell(point, thread_id)){
+            update_current_cell(point, thread_id);
+        }
+        return_value = nd_linear_interp(point, &(weight_caches.at(thread_id).at(0)));
+    }
+
+    template<size_t derivative_dim>
+    void interpolate(const double* point, double& return_value, double& derivative){
+        // get thread id
+        size_t thread_id = omp_get_thread_num();
+        // Check if we are already in correct cell.
+        if (!point_in_current_cell(point, thread_id)){
+            update_current_cell(point, thread_id);
+        }
+        return_value = nd_linear_interp<derivative_dim>(point, &(weight_caches.at(thread_id).at(0)), derivative);
+    }
+
+
+    /**
+     * The interpolation is done using an emulator that has been computed offline and loaded when
+     * the object is instantiated. The type of interpolation can vary throughout the table, which is
+     * divided into cells. These cells are defined by a nd-tree decomposition. The mapping from the
+     * input space to each cell is included in the offline emulator.
+     * @param points An array of double pointers, with size num_dim.
+     *      Each pointer points to an array of doubles size num_points, with the index
+     *      corresponding dimension of the point, i.e.,
+     *      points = [
+     *          [x0_0, x0_1, ...,x0_num_points],
+     *          [x1_0, x1_1, ...,x1_num_points],
+     *          ...
+     *          [xN_0, xN_1, ...,xN_num_points],
+     *      ]
+     *      where N = num_dim.
+     *      This allows for any number of dimensions to be used without changing the method.
+     * @param num_points the number of points that will be interpolated over.
+     * @param return_array Any array of size num_points that will be modified.
+     */
     void interpolate(double** points, size_t num_points, double* return_array){
-        /*
-         * points: An array of double pointers, with size num_dim.
-         *      Each pointer points to an array of doubles size num_points, with the index
-         *      corresponding dimension of the point, i.e.,
-         *      points = [
-         *          [x0_0, x0_1, ...,x0_num_points],
-         *          [x1_0, x1_1, ...,x1_num_points],
-         *          ...
-         *          [xN_0, xN_1, ...,xN_num_points],
-         *      ]
-         *      where N = num_dim.
-         *      This allows for any number of dimensions to be used without changing the method.
-         * num_points: the number of points that will be interpolated over.
-         * return_array: Any array of size num_points that will be modified.
-         *
-         * The interpolation is done using an emulator that has been computed offline and loaded when
-         * the object is instantiated. The type of interpolation can vary throughout the table, which is
-         * divided into cells. These cells are defined by a nd-tree decomposition. The mapping from the
-         * input space to each cell is included in the offline emulator.
-         */
-        // Determine which model (i.e. interpolator) each point will use.
-        for (size_t i = 0; i < num_points; i++){
-            double point_domain[num_dim];
-            double point[num_dim];
-            for (size_t j = 0; j < num_dim; j++){
-                point_domain[j] = points[j][i];
-                point[j] = points[j][i];
-                // Do any needed domain transforms
-                domain_transform(&point_domain[j], j, 1);
-            }
-            // Check if we are already in correct cell.
-            if (!point_in_current_cell(point_domain)){
-                update_current_cell(point_domain);
-            }
-            return_array[i] = interp_point(point);
-        }
-    }
+        // Setup cache
+        std::vector<size_t> cached_cell_index;
+        std::vector<unsigned short int> cached_types;
+        std::vector<unsigned short int> cached_depths;
+        std::vector<size_t> input_mapping(num_points);
+        std::vector<double> local_cache;
+        // -- reserve set size
+        cached_cell_index.reserve(INIT_CELL_CACHE_SIZE);
+        cached_types.reserve(INIT_CELL_CACHE_SIZE);
+        cached_depths.reserve(INIT_CELL_CACHE_SIZE);
+        local_cache.reserve(INIT_CELL_CACHE_SIZE*weight_size);
 
-    encoding_int compute_tree_index(const double* point){
-        // Compute index of the cell that the point falls in in the tree index space
-        size_t cartesian_indices[num_dim];
-        for (size_t i = 0; i < num_dim; i++){
-            // restrict the point to fall within the real domain (as opposed to the index domain)
-            double p = std::max(std::min(point[i], domain[i * 2 + 1]), domain[i * 2 + 0]);
-            // compute cartesian index
-            cartesian_indices[i] = size_t((p - domain[i * 2 + 0]) / dx[i]);
-            // If the index is outside the index domain of the emulator round to the nearest cell.
-            cartesian_indices[i] = std::max(size_t(0), cartesian_indices[i]);
-            cartesian_indices[i] = std::min(max_index, cartesian_indices[i]);
-        }
-        // TODO: change this to use nd-morton
-        // convert to tree index space
-        size_t index = 0;
-        for (size_t i = 0; i < max_depth; i++){
-            for (size_t j = 0; j < num_dim; j++){
-                index = (index << 1) | ((cartesian_indices[num_dim - 1 - j] >> (max_depth - i - 1)) & 1);
+
+
+        // Determine needed cells
+        // auto start = omp_get_wtime();
+        #pragma omp parallel default(none) shared(cached_cell_index,cached_types,cached_depths, return_array,num_points, input_mapping, points, local_cache, node_values, weight_offset, domain ,dx)
+        {
+            // setup thread cache and determine number of threads and their chunk sizes
+            std::vector<size_t> local_mapping;
+            local_mapping.reserve(INIT_CELL_CACHE_SIZE);
+            std::vector<size_t> local_depth;
+            local_depth.reserve(INIT_CELL_CACHE_SIZE);
+            std::vector<size_t> local_type;
+            local_type.reserve(INIT_CELL_CACHE_SIZE);
+
+            // Map input points to their corresponding cell
+            #pragma omp for schedule(static)
+            for (size_t i = 0; i < num_points; ++i) {
+                double point[num_dim];
+                for (size_t j = 0; j < num_dim; ++j) {
+                    point[j] = points[j][i];
+                }
+                unsigned short int depth;
+                unsigned short int type;
+                size_t cell_index = compute_cell_mapping(point, depth,  type);
+                // determine if this is a new cell and save it if it is
+                bool found = false;
+                for (size_t j = 0; j < local_mapping.size(); ++j) {
+                    if (local_mapping.at(j) == cell_index){
+                        found = true;
+                        input_mapping.at(i) = j;
+                        break;
+                    }
+                }
+                if (!found){
+                    input_mapping.at(i) = local_mapping.size();
+                    local_mapping.push_back(cell_index);
+                    local_depth.push_back(depth);
+                    local_type.push_back(type);
+                }
+            }
+            // Create global list of needed cells
+            #pragma omp critical
+            {
+                // We consolidate all the local unique cells into a list of global unique cells.
+                // We change the local mapping array to hold the conversion to the local index to global index
+                for (size_t i = 0; i < local_mapping.size(); ++i) {
+                    bool found = false;
+                    for (size_t j = 0; j < cached_cell_index.size(); ++j) {
+                        if (cached_cell_index.at(j) == local_mapping.at(i)){
+                            found = true;
+                            local_mapping.at(i) = j;
+                            break;
+                        }
+                    }
+                    if (!found){
+                        cached_cell_index.push_back(local_mapping.at(i));
+                        cached_types.push_back(local_type.at(i));
+                        cached_depths.push_back(local_depth.at(i));
+                        local_mapping.at(i) = cached_cell_index.size() - 1;
+                    }
+                }
+            }
+            #pragma omp barrier
+            #pragma omp single
+            {
+                // finish cache setup
+                local_cache.resize(cached_cell_index.size()*weight_size);
+            }
+
+            // load needed cells
+            #pragma omp for
+            for (size_t i = 0; i < cached_cell_index.size(); ++i) {
+                size_t local_cell_index[num_dim];
+                un_global_indexing(cached_cell_index.at(i), local_cell_index);
+                auto depth_diff = max_depth - cached_depths.at(i);
+                for (size_t j = 0; j < (1<<num_dim); ++j) {
+                    size_t point_index = compute_global_index_of_corner(local_cell_index, j, depth_diff);
+                    local_cache.at(i*weight_size+j) = node_values[mphf(point_index)];
+                }
+                // Load domain info into weights
+                auto cell_edge_index_size = 1 << depth_diff;
+                for (size_t j = 0; j < num_dim; ++j) {
+                    local_cache.at(i*weight_size+weight_offset+j) = domain[j*2]+dx[j]*local_cell_index[j];
+                    local_cache.at(i*weight_size+weight_offset+num_dim+j) = domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size);
+                }
+            }
+            // Do interpolation on cells
+            #pragma omp for schedule(static)
+            for (size_t i = 0; i < num_points; ++i) {
+                double point[num_dim];
+                for (size_t j = 0; j < num_dim; ++j) {
+                    point[j] = points[j][i];
+                }
+                size_t index = local_mapping.at(input_mapping.at(i));
+                return_array[i] = nd_linear_interp(point, &(local_cache.at(weight_size*index)));//interp_point(point, &(local_cache.at(weight_size*input_mapping.at(i))));
+                // return_array[i] = nd_linear_interp(point, &(local_cache.at(weight_size*input_mapping.at(i))));//interp_point(point, &(local_cache.at(weight_size*input_mapping.at(i))));
             }
         }
-        return encoding_int(index);
     }
 
 private:
+    std::vector<std::vector<double>> weight_caches;
+    size_t weight_size = (1<<num_dim)+num_dim*2;
     size_t max_index;
     size_t max_depth;
     size_t weight_offset;
+    size_t num_cell_corners;
     size_t model_classes[num_model_classes];
     size_t transforms[num_model_classes];
-    size_t model_class_weights[num_model_classes];
     size_t spacing[num_dim];
+    size_t dims[num_dim];
+    size_t point_index_transform_weights[num_dim];
+    size_t cell_index_transform_weights[num_dim];
     double dx[num_dim];
     double domain[num_dim * 2];
     double index_domain[num_dim * 2];
-    size_t offsets[num_model_classes];
-    size_t model_array_offsets[num_model_classes];
-    encoding_int encoding_array[num_models];
-    indexing_int indexing_array[num_models];
-    double model_arrays[model_array_size];
-    double* current_cell_domain;
-    double* current_weights;
+    char encoding_array[encoding_array_size];
+    double node_values[mapping_array_size];
     size_t current_model_type_index;
+    /* Declare the PTHash function. */
+    typedef pthash::single_phf<pthash::murmurhash2_64,         // base hasher
+            pthash::compact_compact,  // encoder type
+            true                    // minimal
+    > pthash_type;
+    pthash_type mphf;
 
-    void update_current_cell(double* point_domain){
-        // Get model index
-        auto model_index = get_model_index(point_domain);
-        // save current model class
-        auto start = std::begin(offsets);
-        auto stop = std::end(offsets);
-        current_model_type_index = std::upper_bound(start, stop, model_index) - start - 1;
-        // save current weights
-        current_weights = get_weights(model_index);
-        current_cell_domain = compute_cell_domain(current_weights);
+    void update_current_cell(const double* input_point, size_t i){
+        // determine index
+        unsigned short int depth;
+        unsigned short int type;
+        size_t cell_indices[num_dim];
+        size_t cell_index = compute_cell_mapping(input_point, depth,  type, cell_indices);
+
+        // determine which cell it is in
+        auto depth_diff = max_depth - depth;
+        for (size_t j = 0; j < (1<<num_dim); ++j) {
+            size_t point_index = compute_global_index_of_corner(cell_indices, j, depth_diff);
+            weight_caches.at(i).at(j) = node_values[mphf(point_index)];
+        }
+        // Load domain info into weights
+        auto cell_edge_index_size = 1 << depth_diff;
+        for (size_t j = 0; j < num_dim; ++j) {
+            weight_caches.at(i).at(weight_offset+j) = domain[j*2]+dx[j]*cell_indices[j];
+            weight_caches.at(i).at(weight_offset+num_dim+j) = domain[j*2]+dx[j]*(cell_indices[j] + cell_edge_index_size);
+        }
+
     }
 
-    bool point_in_current_cell(double* point_domain){
+    bool point_in_current_cell(const double* point_domain, size_t thread_id){
+        const double* current_cell_domain = get_cell_domain(&(weight_caches.at(thread_id).at(0)));
         // determine if point is in current domain.
         for (size_t i = 0; i<num_dim; i++){
             if ((point_domain[i] < current_cell_domain[i])
-                || (point_domain[i] > current_cell_domain[i+num_dim])){
+            || (point_domain[i] > current_cell_domain[i+num_dim])){
                 return false;
             }
         }
         return true;
     }
 
+    void compute_cartesian_indices(const double *point, size_t *cartesian_indices) const {
+        for (size_t i = 0; i < num_dim; i++){
+            // restrict the point to fall within the real domain (as opposed to the index domain)
+            double p = std::max(std::min(point[i], domain[i * 2 + 1]), domain[i * 2 + 0]);
+            // compute cartesian index
+            cartesian_indices[i] = static_cast<size_t>((p - domain[i * 2 + 0]) / dx[i]);
+            // If the index is outside the index domain of the emulator round to the nearest cell.
+            cartesian_indices[i] = std::max(static_cast<size_t>(0), cartesian_indices[i]);
+            cartesian_indices[i] = std::min(max_index, cartesian_indices[i]);
+        }
+    }
+
+    size_t compute_global_index(const size_t* cell_indices){
+        size_t global_index = 0;
+        for (unsigned int i = 0; i < num_dim; ++i) {
+            global_index += cell_indices[i]*(cell_index_transform_weights[i]);
+        }
+        return global_index;
+    }
+
+    size_t trimmed_and_compute_global_index(size_t* cell_indices, const unsigned short int depth_diff){
+        size_t global_index = 0;
+        for (unsigned int i = 0; i < num_dim; ++i) {
+            cell_indices[i] = ((cell_indices[i]>>depth_diff)<<depth_diff);
+            global_index += cell_indices[i]*(cell_index_transform_weights[i]);
+        }
+        return global_index;
+    }
+
+    size_t compute_global_index_of_corner(const size_t* cell_indices, unsigned int corner,
+                                                 unsigned short int depth_diff){
+        size_t cell_edge_size = (1<<depth_diff);
+        size_t global_index = 0;
+        for (unsigned int i = 0; i < num_dim; ++i) {
+            if ((corner >> i) & 1){
+                global_index += (cell_indices[i] + cell_edge_size)*(point_index_transform_weights[i]);
+            } else{
+                global_index += cell_indices[i]*(point_index_transform_weights[i]);
+            }
+        }
+        return global_index;
+    }
+
+    pthash_type load_mphf(std::string location){
+        /* Set up a build configuration. */
+        pthash::build_configuration config;
+        config.c = 2.5;
+        config.alpha = 0.99;
+        config.minimal_output = true;  // mphf
+        config.verbose_output = true;
+
+        // config.num_partitions = 50;
+        // config.num_threads = 4;
+        // typedef partitioned_mphf<murmurhash2_64,        // base hasher
+        //                          dictionary_dictionary  // encoder type
+        //                          >
+        //     pthash_type;
+
+        // Load pthash
+        pthash_type f;
+        essentials::load(f, location.c_str());
+        return f;
+    }
+
+    void un_global_indexing(size_t global_index, size_t local_index[num_dim]){
+        for (unsigned int i = 0; i < num_dim; ++i) {
+            local_index[i] = global_index / cell_index_transform_weights[i];
+            global_index = global_index % cell_index_transform_weights[i];
+        }
+    }
+
+    // compute the depth, type, global_index and cell_index for the given input_point
+    size_t compute_cell_mapping(const double* input_point, unsigned short int& depth, unsigned short int& type, size_t* cell_index){
+        // Compute index
+        compute_cartesian_indices(input_point, cell_index);
+        // unpack depth and type from char array
+        // -- compute global index for local cell
+        size_t global_index = compute_global_index(cell_index);
+        // -- grab encoded byte and decode
+        char byte = encoding_array[global_index];
+        depth = byte & 0b00001111;
+        type  = byte >> 4;
+        // determine lower corner of the cell that contains this cell (this takes into account
+        // that the cell found before is the smallest resolved cell, so if the depth is not the max
+        // depth it will be a subset of the cell we want to load).
+        auto depth_diff = max_depth - depth;
+        global_index = trimmed_and_compute_global_index(cell_index, depth_diff);
+        return global_index;
+    }
+
+    // compute the depth, type, global_index and cell_index for the given input_point
+    size_t compute_cell_mapping(const double* input_point, unsigned short int& depth, unsigned short int& type){
+        size_t cell_index[num_dim];
+        return compute_cell_mapping(input_point, depth, type, cell_index);
+    }
+
     void domain_transform(double* dim_array, size_t dim, size_t num_vars){
         if (spacing[dim] == 0){
             return;
         } else if (spacing[dim] == 1){
-            for (size_t j = 0; j < num_vars; j++){
+            for (size_t j = 0; j != num_vars; j++){
                 dim_array[j] = log10(dim_array[j]);
             }
         } else {
@@ -162,6 +407,7 @@ private:
 
     void load_emulator(const std::string& file_location){
         // Load hdf5 file
+        std::cout << file_location << std::endl;
         HighFive::File file(file_location, HighFive::File::ReadOnly);
 
         // -- domain
@@ -187,79 +433,42 @@ private:
         attribute = file.getAttribute("spacing");
         attribute.template read(spacing);
         assert(num_dim == attribute.getSpace().getElementCount());
+        // -- dims array
+        attribute = file.getAttribute("dims");
+        attribute.template read(dims);
+        assert(num_dim == attribute.getSpace().getElementCount());
 
         // Load mapping arrays
         HighFive::Group mapping_group = file.getGroup("mapping");
         // -- encoding array
         HighFive::DataSet dataset = mapping_group.getDataSet("encoding");
         dataset.template read(encoding_array);
-        assert(num_models == dataset.getElementCount());
-        // -- indexing array
-        dataset = mapping_group.getDataSet("indexing");
-        dataset.template read(indexing_array);
-        assert(num_models == dataset.getElementCount());
-        // -- offsets array
-        dataset = mapping_group.getDataSet("offsets");
-        dataset.template read(offsets);
-        assert(num_model_classes == dataset.getElementCount());
-
-        // Load model arrays
-        HighFive::Group model_group = file.getGroup("models");
-        auto model_types = model_group.listObjectNames();
-        size_t current_offset = 0;
-        for (size_t i = 0; i < num_model_classes; i++) {
-            model_array_offsets[i] = current_offset;
-            dataset = model_group.getDataSet(model_types[i]);
-            dataset.template read(&(model_arrays[current_offset]));
-            current_offset += dataset.getElementCount();
-            model_class_weights[i] = dataset.getDimensions()[1];
-        }
-        assert(current_offset == model_array_size);
+        dataset = mapping_group.getDataSet("node_values_encoded");
+        dataset.template read(node_values);
     }
 
-    indexing_int get_model_index(const double* point){
-        /*
-         * point: point in num_dim space.
-         *
-         * This function finds the corresponding model that should do the interpolation of this point.
-         */
-        // compute tree index
-        encoding_int tree_index = compute_tree_index(point);
-        // decode index
-        auto start = std::begin(encoding_array);
-        auto end = std::end(encoding_array);
-        auto index = std::upper_bound(start, end, tree_index) - start;
-        return indexing_array[index];
-    }
-
-
-    double* get_weights(const size_t index){
-        // get model weights
-        return &model_arrays[model_array_offsets[current_model_type_index]
-                                + (index - offsets[current_model_type_index])
-                                *model_class_weights[current_model_type_index]];
-    }
-
-    double* compute_cell_domain(double* weights){
+    const double* get_cell_domain(const double* weights){
         // return pointer to the domain
-        return &weights[weight_offset];
+        return &weights[(1<<num_dim)];
     }
 
-
-    double interp_point(const double* point){;
+    double interp_point(const double* point, const double* current_weights){;
         // Choose which interpolation scheme to use
         if (model_classes[current_model_type_index] == MODEL_CLASS_TYPE_ND_LINEAR){
             if (transforms[current_model_type_index] == TRANSFORMS_NONE){
                 return nd_linear_interp(point, current_weights);
-            } else if (transforms[current_model_type_index] == TRANSFORMS_LOG){
-                double solution = nd_linear_interp(point, current_weights+1);
-                solution = pow(10.0, solution);
-                if (current_weights[0] != 0.0){
-                    solution -= std::fabs(current_weights[0]);
-                    solution *=  copysign(1.0, current_weights[0]);
-                }
-                return solution;
-            } else{
+            }
+            // TODO: allow for multiple model classes
+//            else if (transforms[current_model_type_index] == TRANSFORMS_LOG){
+//                double solution = nd_linear_interp(point, current_weights+1);
+//                solution = pow(10.0, solution);
+//                if (current_weights[0] != 0.0){
+//                    solution -= std::fabs(current_weights[0]);
+//                    solution *=  copysign(1.0, current_weights[0]);
+//                }
+//                return solution;
+//            }
+            else{
                 throw std::exception(); //"Unknown transform"
             }
         } else{
@@ -276,11 +485,14 @@ private:
          */
         // transform point to domain [0,1]
         double x[num_dim];
+        const double* cell_domain = get_cell_domain(weight);
+        #pragma omp simd
         for (size_t i = 0; i < num_dim; i++){
-            x[i] = (point[i] - weight[weight_offset + i]) / (weight[weight_offset + num_dim + i] - weight[weight_offset + i]);
+            x[i] = (point[i] - cell_domain[i]) / (cell_domain[num_dim + i] - cell_domain[i]);
         }
         // apply weights
         double solution = 0;
+        #pragma omp simd reduction(+:solution)
         for (size_t i = 0; i < weight_offset; i++){
             double w = 1;
             for (size_t j = 0; j < num_dim; j++){
@@ -292,7 +504,43 @@ private:
         return solution;
     }
 
-};
+    template<size_t derivative_dimension>
+    double nd_linear_interp(const double* point, const double* weight, double& dydx0){
+        /*
+         * do an ND-linear interpolation at the points in X given model weight values.
+         * https://math.stackexchange.com/a/1342377
+         *
+         */
+        // transform point to domain [0,1]
+        double x[num_dim];
+        const double* cell_domain = get_cell_domain(weight);
+        #pragma omp simd
+        for (size_t i = 0; i < num_dim; i++){
+            x[i] = (point[i] - cell_domain[i]) / (cell_domain[num_dim + i] - cell_domain[i]);
+        }
+        // apply weights
+        double solution = 0;
+        dydx0 = 0;
+        #pragma omp simd reduction(+:solution,dydx0)
+        for (size_t i = 0; i < weight_offset; i++) {
+            double w = 1;
+            for (size_t j = 0; (j < derivative_dimension); j++) {  //&& (j != derivative_dimension)
+                auto bit = (i >> j) & 1;
+                w *= bit == 0 ? (1 - x[j]) : x[j];
+            }
+            for (size_t j = derivative_dimension+1; (j < num_dim); j++) {  //&& (j != derivative_dimension)
+                auto bit = (i >> j) & 1;
+                w *= bit == 0 ? (1 - x[j]) : x[j];
+            }
+            auto bit = (i >> derivative_dimension) & 1;
+            dydx0 += weight[i] * w * ( bit == 0 ? -1 : 1);
+            solution += weight[i] * w * (bit == 0 ? (1 - x[derivative_dimension]) : x[derivative_dimension]);
+        }
+        // transform derivative back
+        dydx0 /= static_cast<double>(cell_domain[num_dim + derivative_dimension] - cell_domain[derivative_dimension]);
+        return solution;
+    }
 
+};
 
 #endif //CPP_EMULATOR_EMULATOR_H

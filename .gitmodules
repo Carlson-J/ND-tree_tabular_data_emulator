@@ -4,3 +4,6 @@
 [submodule "morton-nd"]
 	path = cpp_emulator/morton-nd
 	url = https://github.com/kevinhartman/morton-nd.git
+[submodule "cpp_emulator/pthash"]
+	path = cpp_emulator/pthash
+	url = https://github.com/jermp/pthash.git

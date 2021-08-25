@@ -82,11 +82,19 @@ if __name__ == "__main__":
         if not os.path.isdir(save_directory):
             os.makedirs(save_directory)
 
+<<<<<<< HEAD
+            # save compact emulator
+            # sizes[i, j] = emulator.save(save_directory, emulator_name, return_file_size=True)
+            #
+            # make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
+            break
+=======
         # save compact emulator
         size = emulator.save(save_directory, emulator_name, return_file_size=True)
         print(f"Var: {var}, error: {errors[i]:0.2e}, size: {size}")
         #
         # make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
+>>>>>>> main
 
     # for i in range(num_vars):
     #     plt.plot(sizes[:, i], errors)
