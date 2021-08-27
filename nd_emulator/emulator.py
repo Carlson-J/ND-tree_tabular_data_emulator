@@ -366,9 +366,10 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
     # create readme file with the names of the function calls to used with the shared libraries
     with open(save_directory + '/README.md', 'w') as file:
         str = f"""# README for the *{emulator_name}* emulator
-    This folder should contain three file, 
+    This folder should contain four file, 
         *{emulator_name}_table.hdf5*: Contains the data for the compact emulator
         *{emulator_name}_cpp_params.h*: Contains the #define's used when creating the C++ lib
+        *{emulator_name}_mapping.bin*: Contains the mapping information needed for the hash mapping
         *{emulator_name}_lib.so*: C++ lib that has C extern functions that can be called to make, use, and destroy the
             emulator. 
 
