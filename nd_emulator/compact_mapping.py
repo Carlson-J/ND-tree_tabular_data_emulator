@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import h5py
 from os import path
 from .parameter_struct import Parameters
+from numba import jit
 
 # mapping from strings to ints for saving in hdf5 file
 SPACING_TYPES = ['linear', 'log']
@@ -321,6 +322,7 @@ def convert_tree(tree):
     return CompactMapping(encoding_array.flatten(), point_map, new_params)
 
 
+@jit(nopython=True)
 def compute_global_index(cart_indices, dims):
     """
     Compute the global index given the dims and nd-index
@@ -330,8 +332,12 @@ def compute_global_index(cart_indices, dims):
     """
     tmp = cart_indices.copy()
     for j in range(1, len(dims)):
-        tmp[:-j] *= dims[-j]
-    return sum(tmp)
+        for i in range(0, len(dims)-j):
+            tmp[i] *= dims[-j]
+    global_index = 0
+    for i in range(len(cart_indices)):
+        global_index += tmp[i]
+    return np.uint64(global_index)
 
 
 def unpack_global_index(global_index, dims):
@@ -342,7 +348,10 @@ def unpack_global_index(global_index, dims):
     :return:
     """
     cart_indices = np.zeros_like(dims)
-    cart_indices[-1] = global_index % dims[-1]
+    r = global_index
     for i in range(1, len(dims)):
-        cart_indices[i] = (global_index // np.prod(dims[-i:])) % dims[-i]
+        cart_indices[i-1] = r//(np.prod(dims[i:]))
+        r = global_index%(np.prod(dims[i:]))
+    cart_indices[-1] = r
+
     return cart_indices

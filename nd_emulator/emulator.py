@@ -129,14 +129,16 @@ class Emulator:
     def unpack_encoding(self, index):
         """
         Unpack the encoding array to get the depth and model type
-        :param index:
+        :param index (int):
         :return: depth, model type
         """
-        c = ord(self.encoding_array[index])
-        depth = c & 0b00001111
-        type = c >> 4
+        c = self.encoding_array[index]
+        depth = np.uint64(c & 0b00001111)
+        type = np.uint64(c >> 4)
         return depth, type
 
+    # from numba import jit
+    # @jit
     def find_model(self, point):
         """
         Find the model weights and the index of model class array it is
@@ -149,7 +151,7 @@ class Emulator:
         global_index = compute_global_index(cart_indices, self.params.dims - 1)  # the cells are 1 smaller in each dim
         depth, model_type = self.unpack_encoding(global_index)
         # compute owning cell's index
-        depth_diff = np.zeros(self.num_dims, dtype=int)
+        depth_diff = np.zeros(self.num_dims, dtype=np.uint64)
         for i in range(self.num_dims):
             depth_diff[i] = self.params.max_depth - depth
             cart_indices[i] = (cart_indices[i] >> depth_diff[i]) << depth_diff[i]
@@ -160,7 +162,8 @@ class Emulator:
         for i in range(2 ** self.num_dims):
             point_coords = cart_indices.copy()
             for j, d in enumerate(f'{i:0{self.num_dims}b}'[::-1]):
-                point_coords[j] += 2**depth_diff[j] * int(d)
+                point_coords[j] += 2**depth_diff[j] * int(d)# make sure it is in the domain
+                point_coords[j] = min(point_coords[j], self.params.dims[j] - 1)  # make sure it is in the domain
             # add domain coords
             if i == 0:
                 weights[-2*self.num_dims:-self.num_dims] = self.compute_domain_from_indices(point_coords)
@@ -179,7 +182,7 @@ class Emulator:
         output = np.zeros(self.num_dims)
         for i in range(self.num_dims):
             output[i] = self.domain[i][0] + self.dx[i]*point_coords[i]
-        return output
+        return transform_point(output, self.params.spacing, reverse=True)
 
     def compute_cartesian_index(self, point):
         """
@@ -187,18 +190,15 @@ class Emulator:
         :param point: (array) the location of the point
         :return: (int)
         """
+        EPS = 1e-10
         # do any needed transforms for spacing reasons.
         point_new = transform_point(point, self.params.spacing, reverse=False)
-        # restrict inputs to map to cells in the domain
-        for i in range(self.num_dims):
-            point_new[i] = np.max([np.min([point_new[i], self.domain[i][1]]), self.domain[i][0]])
         # compute cartesian coordinate on regular grid of points in the index domain
         coords_cart = np.zeros(self.num_dims, dtype=np.uint)
         for i in range(len(point_new)):
             coords_cart[i] = int(np.floor((point_new[i] - self.index_domain[i][0]) / self.dx[i]))
-            # if the right most point would index into a cell that is not their move it back a cell.
-            if coords_cart[i] == 2 ** self.params.max_depth:
-                coords_cart[i] -= 1
+            # restrict cart index to cells in the domain
+            coords_cart[i] = min(max(coords_cart[i], 0), self.params.dims[i]-2)
         return coords_cart
 
     def get_compact_mapping(self):
@@ -224,17 +224,27 @@ class Emulator:
         :param include_model_type: (bool) return model type at each point as well.
         :return:
         """
-        assert(self.num_dims == 2)
+        assert(self.num_dims <= 2)
         points = []
         values = []
         model_types = []
         for key in self.point_map.keys():
             points.append(unpack_global_index(int(key), self.params.dims))
-            model_types.append(self.unpack_encoding(int(key)))
+            # convert point index to cell index
+            tmp = np.array(points[-1])
+            tmp = np.array([v if v == 0 else v-1 for v in tmp])
+            global_cell_index = compute_global_index(tmp, self.params.dims - 1)
+            model_types.append(self.unpack_encoding(global_cell_index))
+
+        # covert point indices to values
+        point_indices = np.array(points)
+        point_values = []
+        for point_index in point_indices:
+            point_values.append(self.compute_domain_from_indices(point_index))
 
         if include_model_type:
-            return np.array(points), model_types
-        return np.array(points)
+            return np.array(point_values), model_types
+        return np.array(point_values)
 
 
 class EmulatorCpp:

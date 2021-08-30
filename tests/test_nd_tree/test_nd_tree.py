@@ -163,8 +163,8 @@ def test_depth_control(dataset_2d):
     max_depth = 20
     error_threshold = -1
     data, domain, spacing = dataset_2d
-    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
-    assert (emulator.params.max_depth == 3)
+    emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, expand_index_domain=True)
+    assert (emulator.params.max_depth == 4)
 
 
 def test_non_aligned_data():
@@ -184,7 +184,7 @@ def test_non_aligned_data():
 
     # build tree
     EPS = 10 ** -13
-    N = 500
+    N = 200
     error_threshold = 1e-1
     max_depth = 6
     model_classes = [{'type': 'nd-linear'}]
@@ -229,7 +229,7 @@ def test_miss_aligned_2d():
 
     # build tree
     EPS = 10 ** -13
-    N = 500
+    N = 50
     error_threshold = 1e-0
     max_depth = 6
     model_classes = [{'type': 'nd-linear'}]
@@ -287,9 +287,9 @@ def test_miss_aligned_3d():
                               expand_index_domain=True)
 
     # check for correct number of cells
-    correct_num_cells = 17
-    num_cells = len(emulator.index_array)
-    assert (num_cells == correct_num_cells)
+    correct_num_points = 57
+    num_points = len(emulator.point_map)
+    assert (num_points == correct_num_points)
 
 
 def test_miss_aligned_2d_extended():

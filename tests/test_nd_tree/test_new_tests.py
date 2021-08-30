@@ -11,32 +11,51 @@ import shutil
 import os
 
 
-def test_2d_interpolation(dataset_2d_log):
+def test_miss_aligned_2d():
     """
-    GIVEN: 2d function evaluations and a domain.
-    WHEN: Create an emulator from data
-    THEN: Correctly sorts and interpolates data
+    Given: 2d domain and function that are not aligned with tree
+    When: tree is built
+    Then: correctly expands cells
     """
-    EPS = 10 ** -14
-    N = 200
-    data, domain, spacing = dataset_2d_log
-    error_threshold = 0
-    max_depth = 2
-    model_classes = [{'type': 'nd-linear', 'transforms': None}]
+    # create function and domain
+    domain = [[0, 2], [0, 2]]
+    shape = [2 ** 3 + 10, 2 ** 3 + 10]
+    x = np.linspace(domain[0][0], domain[0][1], shape[0])
+    X, Y = np.meshgrid(x, x)
+    Z = 1.0 / (X + Y + 1e-3)
+    data = {'f': Z}
+    spacing = ['linear', 'linear']
+
+    # build tree
+    EPS = 10 ** -13
+    N = 500
+    error_threshold = 1e-0
+    max_depth = 6
+    model_classes = [{'type': 'nd-linear'}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
     # Compute new values over domain
-    X, Y = np.meshgrid(np.linspace(domain[0][0], domain[0][1], N), np.logspace(np.log10(domain[1][0])
-                                                                               , np.log10(domain[1][1]), N))
-    input = np.array([X.flatten(), Y.flatten()]).T
-    f_interp = emulator(input).reshape([N, N])
-    f_true = X * Y
-    error = abs(f_true - f_interp)
-    # resize and plot
-    plt.imshow(error, origin='lower')
-    plt.title("Should not see any grid structure")
+    x_test = np.linspace(domain[0][0], domain[0][1], N).reshape([N, 1])
+    X_test, Y_test = np.meshgrid(x_test, x_test)
+    points = np.array([X_test.flatten(), Y_test.flatten()]).T
+    f_interp = emulator(points)
+    f_true = 1.0 / (X_test + Y_test + 1e-3)
+    error = abs(f_true.flatten() - f_interp)
+    emulator.save('.', 'miss_aligned_2d')
+    # get node locations
+    cell_locations = emulator.get_cell_locations()
+    plt.figure()
+    plt.imshow(f_true, extent=[0, 2, 0, 2], origin='lower')
+    plt.scatter(X.flatten(), Y.flatten())
+    plt.scatter(cell_locations[:, 0], cell_locations[:, 1], label='Cell Locations')
+    plt.legend()
+    plt.ylabel('y')
+    plt.xlabel('x')
+    # Plot errors
+    plt.figure()
+    plt.imshow(error.reshape([N, N]), extent=[0, 2, 0, 2], origin='lower')
     plt.colorbar()
+    plt.legend()
+    plt.xlabel('x')
+    plt.ylabel('y')
     plt.show()
-
-    # check if error is low
-    assert np.all(error <= EPS)
