@@ -40,7 +40,7 @@ def test_cpp_emulator():
     # time the evaluation of both methods
     # # CPP
     start_cpp = time()
-    out_cpp = emulator_cpp(inputs)
+    out_cpp = emulator_cpp(inputs.T)
     end_cpp = time()
     dt_cpp = end_cpp - start_cpp
     # # Python
@@ -86,7 +86,7 @@ def test_cpp_emulator_miss_aligned_2d():
     # time the evaluation of both methods
     # # CPP
     start_cpp = time()
-    out_cpp = emulator_cpp(inputs)
+    out_cpp = emulator_cpp(inputs.T)
     end_cpp = time()
     dt_cpp = end_cpp - start_cpp
     # # Python
@@ -130,7 +130,7 @@ def test_cpp_emulator_miss_aligned_2d_extended():
     # time the evaluation of both methods
     # # CPP
     start_cpp = time()
-    out_cpp = emulator_cpp(inputs)
+    out_cpp = emulator_cpp(inputs.T)
     end_cpp = time()
     dt_cpp = end_cpp - start_cpp
     # # Python
@@ -212,7 +212,7 @@ def test_cpp_emulator_multiple_models():
     # time the evaluation of both methods
     # # CPP
     start_cpp = time()
-    out_cpp = emulator_cpp(inputs)
+    out_cpp = emulator_cpp(inputs.T)
     end_cpp = time()
     dt_cpp = end_cpp - start_cpp
     # # Python

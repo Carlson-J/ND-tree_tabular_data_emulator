@@ -307,6 +307,7 @@ class EmulatorCpp:
         :param inputs: (2d array) each row is a different point
         :return: (array) the function value at each point.
         """
+        inputs = np.array(inputs).T
         # allocate memory to work in
         num_points = inputs.shape[1]
         output = np.zeros(num_points)
