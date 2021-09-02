@@ -4,11 +4,11 @@
 #include "emulator.h"
 #include "table_params.h"
 
-#define POINT_INPUTS double* x, double* y, double* z
-#define POINT_INPUTS_SINGLE double& x, double& y, double& z
-#define POINT_GROUPING double* points[3] = {x,y,z}
-#define POINT_GROUPING_SINGLE double points[3] = {x,y,z}
-#define POINT_ARG x, y, z
+// #define POINT_INPUTS double* x, double* y, double* z
+// #define POINT_INPUTS_SINGLE double& x, double& y, double& z
+// #define POINT_GROUPING double* points[3] = {x,y,z}
+// #define POINT_GROUPING_SINGLE double points[3] = {x,y,z}
+// #define POINT_ARG x, y, z
 
 // extern "C" {
 // Emulator<ND_TREE_EMULATOR_TYPE>* ND_TREE_EMULATOR_NAME_SETUP(const char* filename) {

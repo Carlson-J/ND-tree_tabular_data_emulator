@@ -310,7 +310,7 @@ def test_miss_aligned_2d_extended():
 
     # build tree
     EPS = 10 ** -13
-    N = 500
+    N = 50
     error_threshold = 1e-0
     max_depth = 6
     model_classes = [{'type': 'nd-linear'}]
@@ -457,6 +457,7 @@ def test_linear_model_switching():
     model_classes = [{'type': 'nd-linear', 'transforms': None}, {'type': 'nd-linear', 'transforms': 'log'}]
     # Create emulator
     emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes, relative_error=True)
+    emulator.save('.', 'model_switching')
     # Compute new values over domain
     x_test = np.linspace(domain[0][0], domain[0][1], N).reshape([N, 1])
     f_interp = emulator(x_test)
@@ -466,12 +467,12 @@ def test_linear_model_switching():
     error = abs(f_true.flatten() - f_interp)
     # get node locations
     cell_locations, model_types = emulator.get_cell_locations(include_model_type=True)
-    colors_map = np.array(model_types)[:, 1] == 'log'
+    colors_map = [bool(v) for v in model_types]
     colors_map_i = [not v for v in colors_map]
 
     plt.figure()
-    plt.plot(cell_locations.flatten()[colors_map_i], min(y) * np.ones_like(cell_locations.flatten()[colors_map_i]), 'b*', label='Cell Locations lin')
-    plt.plot(cell_locations.flatten()[colors_map], min(y) * np.ones_like(cell_locations.flatten())[colors_map], 'r*', label='Cell Locations log')
+    plt.plot(cell_locations.flatten()[colors_map], min(y) * np.ones_like(cell_locations.flatten()[colors_map]), 'b*', label='Cell Locations lin')
+    plt.plot(cell_locations.flatten()[colors_map_i], min(y) * np.ones_like(cell_locations.flatten())[colors_map_i], 'r*', label='Cell Locations log')
     # Plot errors
     plt.plot(x_test, np.log10(error), '--', label=' log error')
     plt.plot(x_test, f_true, label='true')
@@ -481,6 +482,7 @@ def test_linear_model_switching():
     plt.xlabel('x')
     plt.ylabel('y')
     plt.show()
+
 
     # make sure the errors do not change from where they are right now
     # in each section. Values where computed when things looked right.

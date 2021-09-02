@@ -65,7 +65,6 @@ public:
                 cell_index_transform_weights[i] *= dims[j] - 1;  // -1 since this is a cell index instead of a point index.
             }
         }
-
         // load minimal perfect hash function
         mphf = load_mphf(mphf_location);
 
@@ -220,7 +219,7 @@ public:
                 auto cell_edge_index_size = 1 << depth_diff;
                 for (size_t j = 0; j < num_dim; ++j) {
                     local_cache.at(i*weight_size+weight_offset+j) = domain[j*2]+dx[j]*local_cell_index[j];
-                    local_cache.at(i*weight_size+weight_offset+num_dim+j) = domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size);
+                    local_cache.at(i*weight_size+weight_offset+num_dim+j) = std::min(domain[j*2 + 1], domain[j*2]+dx[j]*(local_cell_index[j] + cell_edge_index_size));
                 }
             }
             // Do interpolation on cells
@@ -280,7 +279,7 @@ private:
         auto cell_edge_index_size = 1 << depth_diff;
         for (size_t j = 0; j < num_dim; ++j) {
             weight_caches.at(i).at(weight_offset+j) = domain[j*2]+dx[j]*cell_indices[j];
-            weight_caches.at(i).at(weight_offset+num_dim+j) = domain[j*2]+dx[j]*(cell_indices[j] + cell_edge_index_size);
+            weight_caches.at(i).at(weight_offset+num_dim+j) = std::min(domain[j*2 + 1], domain[j*2]+dx[j]*(cell_indices[j] + cell_edge_index_size));
         }
 
     }
@@ -332,7 +331,7 @@ private:
         size_t global_index = 0;
         for (unsigned int i = 0; i < num_dim; ++i) {
             if ((corner >> i) & 1){
-                global_index += (cell_indices[i] + cell_edge_size)*(point_index_transform_weights[i]);
+                global_index += std::min(dims[i] - 1, (cell_indices[i] + cell_edge_size))*(point_index_transform_weights[i]);
             } else{
                 global_index += cell_indices[i]*(point_index_transform_weights[i]);
             }

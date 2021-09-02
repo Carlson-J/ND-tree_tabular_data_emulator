@@ -2,7 +2,7 @@ import numpy as np
 from .domain_functions import transform_domain, transform_point
 from .dtree import DTree
 from .compact_mapping import convert_tree, compute_global_index, unpack_global_index, MODEL_CLASS_TYPES
-from .model_classes import nd_linear_model
+from .model_classes import nd_linear_model, compute_log_transform_weight
 from .compact_mapping import CompactMapping, save_compact_mapping, load_compact_mapping
 from .parameter_struct import Parameters
 import ctypes
@@ -150,19 +150,23 @@ class Emulator:
         # determine model type and location
         global_index = compute_global_index(cart_indices, self.params.dims - 1)  # the cells are 1 smaller in each dim
         depth, model_type = self.unpack_encoding(global_index)
+        # add extra transform if needed
+        if self.params.model_classes[model_type]['transforms'] == "log":
+            transform_weights = 1
+        else:
+            transform_weights = 0
         # compute owning cell's index
         depth_diff = np.zeros(self.num_dims, dtype=np.uint64)
         for i in range(self.num_dims):
             depth_diff[i] = self.params.max_depth - depth
             cart_indices[i] = (cart_indices[i] >> depth_diff[i]) << depth_diff[i]
         # get model weights
-        # TODO: deal with the extra sign factor for the log transform model class
-        weights = np.zeros(2 ** self.num_dims + 2*self.num_dims)
+        weights = np.zeros(2 ** self.num_dims + 2*self.num_dims + transform_weights)
         # -- Go over each corner of the hyper-cube
         for i in range(2 ** self.num_dims):
             point_coords = cart_indices.copy()
             for j, d in enumerate(f'{i:0{self.num_dims}b}'[::-1]):
-                point_coords[j] += 2**depth_diff[j] * int(d)# make sure it is in the domain
+                point_coords[j] += 2**depth_diff[j] * int(d)  # make sure it is in the domain
                 point_coords[j] = min(point_coords[j], self.params.dims[j] - 1)  # make sure it is in the domain
             # add domain coords
             if i == 0:
@@ -170,7 +174,10 @@ class Emulator:
             elif i == 2 ** self.num_dims - 1:
                 weights[-self.num_dims:] = self.compute_domain_from_indices(point_coords)
             global_index = compute_global_index(point_coords, self.params.dims)
-            weights[i] = self.point_map[f'{global_index}']
+            weights[transform_weights+i] = self.point_map[f'{global_index}']
+        if self.params.model_classes[model_type]['transforms'] == "log":
+            weights[:transform_weights] = compute_log_transform_weight(weights[transform_weights:2**self.num_dims+transform_weights])
+            weights[transform_weights:2**self.num_dims+transform_weights] = np.log10(weights[transform_weights:2**self.num_dims+transform_weights])
         return weights, model_type
 
     def compute_domain_from_indices(self, point_coords):
@@ -234,7 +241,7 @@ class Emulator:
             tmp = np.array(points[-1])
             tmp = np.array([v if v == 0 else v-1 for v in tmp])
             global_cell_index = compute_global_index(tmp, self.params.dims - 1)
-            model_types.append(self.unpack_encoding(global_cell_index))
+            model_types.append(self.unpack_encoding(global_cell_index)[1])
 
         # covert point indices to values
         point_indices = np.array(points)
@@ -248,55 +255,41 @@ class Emulator:
 
 
 class EmulatorCpp:
-    def __init__(self, filename, extern_name, extern_lib_location):
+    def __init__(self, filename, mapping_filename, extern_name, extern_lib_location):
         """
         A wrapper class for the C++ version of the emulator.
         An extern function needs to be built for each emulator.
         The emulator will use this data to map inputs to correct cells and perform the corresponding interpolation
         in the cell.
         :param filename: (string) Location of hdf5 file that holds the info needed to construct the emulator.
-        :param extern_name: (string) name of the extern C function that goes along with the emulator
+        :param mapping_filename: (string) Location of bin file containing the point mapping.
+        :param extern_name: (string) name of the extern C function that goes along with the emulator.
         """
-        # get index and encoding types
         with h5py.File(filename, 'r') as file:
-            encoding_type = np.ctypeslib.as_ctypes_type(file['mapping']['encoding'].dtype)
-            indexing_type = np.ctypeslib.as_ctypes_type(file['mapping']['indexing'].dtype)
-
-        class emulator_struct(ctypes.Structure):
-            _fields_ = [
-                ('max_depth', ctypes.c_size_t),
-                ('weight_offset', ctypes.c_size_t),
-                ('model_classes', ctypes.POINTER(ctypes.c_size_t)),
-                ('transforms', ctypes.POINTER(ctypes.c_size_t)),
-                ('model_class_weights', ctypes.POINTER(ctypes.c_size_t)),
-                ('spacing', ctypes.POINTER(ctypes.c_size_t)),
-                ('dx', ctypes.POINTER(ctypes.c_double)),
-                ('domain', ctypes.POINTER(ctypes.c_double)),
-                ('offsets', ctypes.POINTER(ctypes.c_size_t)),
-                ('model_array_offsets', ctypes.POINTER(ctypes.c_size_t)),
-                ('encoding_array', ctypes.POINTER(encoding_type)),
-                ('indexing_array', ctypes.POINTER(indexing_type)),
-                ('model_arrays', ctypes.POINTER(ctypes.c_double)),
-                ('current_cell_domain', ctypes.POINTER(ctypes.c_double)),
-                ('current_weights', ctypes.POINTER(ctypes.c_double)),
-                ('current_model_type_index', ctypes.c_size_t),
-            ]
+            self.num_dims = len(file.attrs['dims'])
 
         # Load C++ emulator
         self.lib = ctypes.cdll.LoadLibrary(extern_lib_location)
         self.setup_emulator = eval(f'self.lib.{extern_name}_emulator_setup')
         self.interpolate = eval(f'self.lib.{extern_name}_emulator_interpolate')
+        # self.interpolate_single = eval(f'self.lib.{extern_name}_emulator_interpolate_single')
+        # self.interpolate_single_dx1 = eval(f'self.lib.{extern_name}_emulator_interpolate_single_dx1')
         self.free = eval(f'self.lib.{extern_name}_emulator_free')
 
         # set input and output type
-        self.setup_emulator.argtypes = [ctypes.c_char_p]
-        self.interpolate.argtypes = [ctypes.POINTER(emulator_struct), ndpointer(dtype=np.uintp, ndim=1, flags='C'),
-                                     ctypes.c_size_t,
-                                     ctypes.POINTER(ctypes.c_double)]
-        self.setup_emulator.restype = ctypes.POINTER(emulator_struct)
+        self.setup_emulator.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.POINTER(ctypes.c_void_p)]
+        self.interpolate.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+        self.free.argtypes = [ctypes.POINTER(ctypes.c_void_p)]
+        # -- add the number of args
+        for i in range(self.num_dims):
+            self.interpolate.argtypes.append(ctypes.POINTER(ctypes.c_double))
+        self.interpolate.argtypes.append(ctypes.POINTER(ctypes.c_size_t))
+        self.interpolate.argtypes.append(ctypes.POINTER(ctypes.c_double))
+        self.setup_emulator.restype = ctypes.POINTER(ctypes.c_void_p)
 
         # load emulator
-        self.emulator = self.setup_emulator(filename.encode("UTF-8"))
+        self.emulator = ctypes.c_void_p()
+        self.setup_emulator(filename.encode("UTF-8"), mapping_filename.encode("UTF-8"), self.emulator)
 
     def __del__(self):
         """
@@ -316,17 +309,16 @@ class EmulatorCpp:
         """
         # allocate memory to work in
         num_points = inputs.shape[1]
-        output = (ctypes.c_double * num_points)()
+        output = np.zeros(num_points)
         # construct 2d array for C++ function
         # transform inputs
-        double_pointer_2d = (
-                    inputs.__array_interface__['data'][0] + np.arange(inputs.shape[0]) * inputs.strides[0]).astype(
-            np.uintp)
+        ptrs = [inputs[i, :].ctypes.data_as(ctypes.POINTER(ctypes.c_double)) for i in range(inputs.shape[0])]
 
         # do interpolation
-        self.interpolate(self.emulator, double_pointer_2d, ctypes.c_size_t(num_points), output)
+        self.interpolate(self.emulator, *ptrs, ctypes.byref(ctypes.c_size_t(num_points)),
+                         output.ctypes.data_as(ctypes.POINTER(ctypes.c_double)))
 
-        return np.array(output)
+        return output
 
 
 def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
@@ -357,7 +349,7 @@ def make_cpp_emulator(save_directory, emulator_name, cpp_source_dir):
     # -- Create build files
     current_dir = os.getcwd()
     os.chdir(tmp_dir)
-    cmakeCmd = ["cmake", current_dir+'/'+cpp_source_dir, '.', '-DCMAKE_BUILD_TYPE=RelWithDebInfo'] #RelWithDebInfo
+    cmakeCmd = ["cmake", f"{current_dir+'/'+cpp_source_dir}", '.', '-DCMAKE_BUILD_TYPE=RelWithDebInfo'] #RelWithDebInfo
     subprocess.check_call(cmakeCmd, stderr=subprocess.STDOUT, shell=shell, env=new_env)
     # -- build C++ code
     cmakeCmd = ["cmake", '--build', '.', '--target', 'ND_emulator_lib', '--verbose']

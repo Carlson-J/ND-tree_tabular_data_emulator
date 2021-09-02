@@ -10,18 +10,20 @@ import sys
 import shutil
 import os
 
+import pathlib
 
 @pytest.mark.dependency(depends=["test_2d_log_transforms"])
 def test_cpp_emulator():
     save_directory = '.'
     emulator_name = 'non_linear2d'
-    cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
+    cpp_source_dir = './../cpp_emulator'
     make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
     EPS = 10 ** -2
     # load CPP emulator
-    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
-                               save_directory + '/' + emulator_name + ".so")
+    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5",
+                               save_directory + '/' + emulator_name + "_mapping.bin",
+                               emulator_name, save_directory + '/' + emulator_name + ".so")
 
     # load python emulator
     emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")
@@ -58,15 +60,16 @@ def test_cpp_emulator():
 
 
 def test_cpp_emulator_miss_aligned_2d():
-    save_directory = './'
+    save_directory = './.'
     emulator_name = 'miss_aligned_2d'
-    cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
+    cpp_source_dir = './../cpp_emulator'
     make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
     EPS = 10**-2
     # load CPP emulator
-    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
-                               save_directory + '/' + emulator_name + ".so")
+    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5",
+                               save_directory + '/' + emulator_name + "_mapping.bin",
+                               emulator_name, save_directory + '/' + emulator_name + ".so")
 
     # load python emulator
     emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")
@@ -101,15 +104,16 @@ def test_cpp_emulator_miss_aligned_2d():
 
 
 def test_cpp_emulator_miss_aligned_2d_extended():
-    save_directory = './'
+    save_directory = './.'
     emulator_name = 'miss_aligned_2d_extended'
-    cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
+    cpp_source_dir = './../cpp_emulator'
     make_cpp_emulator(save_directory, emulator_name, cpp_source_dir)
 
     EPS = 10**-2
     # load CPP emulator
-    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
-                               save_directory + '/' + emulator_name + ".so")
+    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5",
+                               save_directory + '/' + emulator_name + "_mapping.bin",
+                               emulator_name, save_directory + '/' + emulator_name + ".so")
 
     # load python emulator
     emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")
@@ -144,9 +148,9 @@ def test_cpp_emulator_miss_aligned_2d_extended():
 
 
 def test_cpp_emulator_multiple_models():
-    save_directory = '.'
+    save_directory = './.'
     emulator_name = 'non_linear_multi_model'
-    cpp_source_dir = nd_emulator.__path__[0] + '/../cpp_emulator'
+    cpp_source_dir = './../cpp_emulator'
 
     # create emulator
     # create function and domain
@@ -189,8 +193,9 @@ def test_cpp_emulator_multiple_models():
 
     EPS = 10 ** -10
     # load CPP emulator
-    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5", emulator_name,
-                               save_directory + '/' + emulator_name + "_lib.so")
+    emulator_cpp = EmulatorCpp(save_directory + '/' + emulator_name + "_table.hdf5",
+                               save_directory + '/' + emulator_name + "_mapping.bin",
+                               emulator_name, save_directory + '/' + emulator_name + "_lib.so")
 
     # load python emulator
     emulator_py = load_emulator(save_directory + '/' + emulator_name + "_table.hdf5")

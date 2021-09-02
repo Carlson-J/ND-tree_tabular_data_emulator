@@ -48,6 +48,11 @@ def save_header_file(folder_path, emulator_name, indexing_type, num_dims, num_mo
         file.write("#undef ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE\n")
         file.write("#undef ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE_DX1\n")
         file.write("#undef ND_TREE_EMULATOR_NAME_FREE\n")
+        file.write("#undef POINT_INPUTS\n")
+        file.write("#undef POINT_INPUTS_SINGLE\n")
+        file.write("#undef POINT_GROUPING\n")
+        file.write("#undef POINT_GROUPING_SINGLE\n")
+        file.write("#undef POINT_ARG\n")
         file.write("#define ND_TREE_EMULATOR_TYPE ")
         file.write(f"{type_header_conversion(indexing_type)}, ")
         file.write(f"{num_model_classes}, ")
@@ -61,6 +66,23 @@ def save_header_file(folder_path, emulator_name, indexing_type, num_dims, num_mo
         file.write(f"#define ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE {emulator_name}_emulator_interpolate_single\n")
         file.write(f"#define ND_TREE_EMULATOR_NAME_INTERPOLATE_SINGLE_DX1 {emulator_name}_emulator_interpolate_single_dx1\n")
         file.write(f"#define ND_TREE_EMULATOR_NAME_FREE {emulator_name}_emulator_free\n")
+        file.write("#define POINT_INPUTS ")
+        [file.write(f", double* x{i}" if i != 0 else f"double* x{i}") for i in range(num_dims)]
+        file.write("\n")
+        file.write("#define POINT_INPUTS_SINGLE ")
+        [file.write(f", double& x{i}" if i != 0 else f"double& x{i}") for i in range(num_dims)]
+        file.write("\n")
+        file.write("#define POINT_GROUPING ")
+        file.write(f"double* points[{num_dims}] = " + '{')
+        [file.write(f",x{i}" if i != 0 else f"x{i}") for i in range(num_dims)]
+        file.write("}\n")
+        file.write("#define POINT_GROUPING_SINGLE ")
+        file.write(f"double points[{num_dims}] = " + '{')
+        [file.write(f",x{i}" if i != 0 else f"x{i}") for i in range(num_dims)]
+        file.write("}\n")
+        file.write("#define POINT_ARG ")
+        [file.write(f",x{i} " if i != 0 else f"x{i}") for i in range(num_dims)]
+        file.write("\n")
 
 
 def save_compact_mapping(compact_mapping, folder_path, emulator_name, return_file_size=False):
@@ -149,7 +171,12 @@ def load_compact_mapping(filename, return_file_size=False):
         # load mapping arrays
         encoding_array = file['mapping']['encoding'][...]
         index_array = file['mapping']['indexing'][...]
-        offsets = file['mapping']['offsets'][...]
+        node_values = file['mapping']['node_values'][...]
+
+        # create point map
+        point_map = {}
+        for i in range(len(index_array)):
+            point_map[f'{index_array[i]}'] = node_values[i]
 
         # load parameters
         max_depth = file.attrs['max_depth']
@@ -162,13 +189,14 @@ def load_compact_mapping(filename, return_file_size=False):
         domain = file.attrs['domain']
         index_domain = file.attrs['index_domain']
         expand_index_domain = file.attrs['expand_index_domain']
-        params = Parameters(max_depth, np.array(spacing), np.array([2 ** max_depth for i in range(len(spacing))]),
+        dims = np.array(file.attrs['dims'][:])
+        params = Parameters(max_depth, np.array(spacing), dims,
                             error_threshold, np.array(model_classes), max_test_points, relative_error, np.array(domain),
                             np.array(index_domain), expand_index_domain)
         file.close()
 
     # Return compact emulator
-    compact_mapping = CompactMapping(encoding_array, index_array, offsets, model_arrays, params)
+    compact_mapping = CompactMapping(encoding_array, point_map, params)
     if return_file_size:
         return compact_mapping, file_size_bytes
     else:

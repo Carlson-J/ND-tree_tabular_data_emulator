@@ -3,7 +3,7 @@ from itertools import permutations
 from numba import jit
 
 
-def fit_nd_linear_model(F, X, transforms=None):
+def fit_nd_linear_model(F, X, transforms: object = None):
     """
     :param transforms: (str or None) transform to do on value before fit.
     :param F: (nd-array) function values
@@ -28,23 +28,9 @@ def fit_nd_linear_model(F, X, transforms=None):
     f = weights[transform_num_vars:2**dims+transform_num_vars]   # alis part of the weights the contain f
     # handle case where f is only zeros
     if transforms == 'log':
-        if np.all(f == 0):
-            transform_var = 0
-        else:
-            # determine if it should be multiplied by a sign
-            if abs(np.min(f)) > abs(np.max(f)):
-                # do reflection
-                f[:] = f[:]*-1
-                transform_var = -1
-            # shift values to be all positive
-            if np.min(f) == 0:
-                transform_var = np.max(f)
-                f[:] += np.max(f)
-            elif np.min(f) < 0:
-                transform_var *= -2*np.min(f)
-                f[:] += -2*np.min(f)
-            f[:] = np.log10(f[:])
-        weights[:transform_num_vars] = transform_var
+        weights[:transform_num_vars] = compute_log_transform_weight(f)
+        weights[transform_num_vars:2 ** dims + transform_num_vars] = np.log10(weights[transform_num_vars:2 ** dims + transform_num_vars])
+
     elif transforms is not None:
         raise ValueError(f"No transform of type '{transforms}' found")
     # save two corner coordinates
@@ -52,6 +38,33 @@ def fit_nd_linear_model(F, X, transforms=None):
     weights[-dims:] = X[1][:]
     return weights
 
+
+def compute_log_transform_weight(f):
+    """
+    Finds the variable needed to transform the node values so that they are all positive.
+    :param f: (1d array) array of values in a call/node. These values may be modified!
+    :return: (double) transform var
+    """
+    transform_var = 0
+    if np.all(f == 0):
+        transform_var = 0
+    else:
+        # determine if it should be multiplied by a sign
+        if abs(np.min(f)) > abs(np.max(f)):
+            # do reflection
+            f[:] = f[:] * -1
+            transform_var = -1
+        # shift values to be all positive
+        if np.min(f) == 0:
+            transform_var = np.max(f)
+            f[:] += np.max(f)
+        elif np.min(f) < 0:
+            if transform_var == 0:
+                transform_var = -2 * np.min(f)
+            else:
+                transform_var *= -2 * np.min(f)
+            f[:] += -2 * np.min(f)
+    return transform_var
 
 def nd_linear_model(weights, X, transform=None):
     """
