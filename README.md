@@ -12,10 +12,10 @@ The emulator uses multiple submodule, which must be loaded when the repo is clon
 ```
 git submodule update --init --recursive --remote
 ```
-# Building an Emulator
+# Using the ND-Emulator
 An example of how the `build_emulator` function is called is shown in the `build_emulator.py` file. 
 
-## Loading the Training Data
+## Building an Emulator
 In order to create an emulator training data is needed. 
 We store the data in a python dictionary, with the format:
 ```
@@ -40,7 +40,15 @@ You then build the emulator by calling
 emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
 ```
 
-## Calling the emulator
+## Saving the emulator
+
+## Building a C++ library for the Emulator
+
+## Using an Emulator
+### Python
+Loading an emulator in python is simple. You can either load it directly into python or load a C++ library.
+
+
 The emulator can be called directly by passing an nd-array of inputs to the emulator, as shown below,
 ```
 # 2d example of calling emulator
@@ -49,3 +57,11 @@ y = np.linspace(0,1,10)
 inputs = np.array([x,y]).T
 output = emulator(inputs)
 ```
+This works for either an emulator 
+### C++
+
+### Fortran
+
+## Calling the emulator
+
+
