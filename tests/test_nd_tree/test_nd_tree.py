@@ -50,9 +50,13 @@ def test_2d_interpolation(dataset_2d_log):
     f_true = X * Y
     error = abs(f_true - f_interp)
     # resize and plot
+    plt.figure()
     plt.imshow(error, origin='lower')
     plt.title("Should not see any grid structure")
+    plt.xlabel('x0')
+    plt.ylabel('x1')
     plt.colorbar()
+    plt.savefig("test_2d_interpolation.png")
     plt.show()
 
     # check if error is low
@@ -150,6 +154,7 @@ def test_1d_interpolation():
     plt.legend()
     plt.xlabel('x')
     plt.ylabel('y')
+    plt.savefig("test_1d_interpolation.png")
     plt.show()
 
 
@@ -209,6 +214,7 @@ def test_non_aligned_data():
     plt.legend()
     plt.xlabel('x')
     plt.ylabel('y')
+    plt.savefig("test_non_aligned_data.png")
     plt.show()
 
 
@@ -252,6 +258,7 @@ def test_miss_aligned_2d():
     plt.legend()
     plt.ylabel('y')
     plt.xlabel('x')
+    plt.savefig("test_miss_aligned_2d_p1.png")
     # Plot errors
     plt.figure()
     plt.imshow(error.reshape([N, N]), extent=[0, 2, 0, 2], origin='lower')
@@ -259,6 +266,7 @@ def test_miss_aligned_2d():
     plt.legend()
     plt.xlabel('x')
     plt.ylabel('y')
+    plt.savefig("test_miss_aligned_2d_p2.png")
     plt.show()
 
 
@@ -335,6 +343,7 @@ def test_miss_aligned_2d_extended():
     plt.legend()
     plt.ylabel('y')
     plt.xlabel('x')
+    plt.savefig("test_miss_aligned_2d_extended_p1.png")
     # Plot errors
     plt.figure()
     plt.imshow(error.reshape([N, N]), extent=np.array(domain).flatten(), origin='lower')
@@ -342,6 +351,7 @@ def test_miss_aligned_2d_extended():
     plt.legend()
     plt.xlabel('x')
     plt.ylabel('y')
+    plt.savefig("test_miss_aligned_2d_extended_p2.png")
     plt.show()
 
 
@@ -388,6 +398,7 @@ def test_linear_log_transform():
     plt.legend()
     plt.xlabel('x')
     plt.ylabel('y')
+    plt.savefig("test_linear_log_transform.png")
     plt.show()
 
     # make sure the errors do not change from where they are right now
@@ -423,9 +434,11 @@ def test_2d_log_transforms(dataset_2d_non_linear):
     f_true = np.cos(X)*2 + np.sin(Y)
     error = abs(f_true - f_interp)
     # resize and plot
+    plt.figure()
     plt.imshow(error, origin='lower')
     plt.title("Grid structure should be seen")
     plt.colorbar()
+    plt.savefig("test_2d_log_transforms.png")
     plt.show()
 
     emulator.save('.', 'non_linear2d')
@@ -481,6 +494,7 @@ def test_linear_model_switching():
     plt.legend()
     plt.xlabel('x')
     plt.ylabel('y')
+    plt.savefig("test_linear_model_switching.png")
     plt.show()
 
 

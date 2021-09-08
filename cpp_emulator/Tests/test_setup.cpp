@@ -1,7 +1,7 @@
 //
 // Created by jared on 5/26/2021.
 //
-
+#define PATH_TO_TEST_DATA "../../Tests/"
 #define CATCH_CONFIG_MAIN  // This tells Catch to provide a main() - only do this in one cpp file
 #include "catch.h"
 #include "H5Cpp.h"
@@ -51,8 +51,8 @@ TEST_CASE("Checkpoint solution", "[checkpoint]"){
     // Load the emulator
 //#include "test_v2_sparse_cpp_params.h"
 
-    std::string table_loc = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/test_v2_sparse_table.hdf5";
-    std::string mapping_loc = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";
+    std::string table_loc = std::string(PATH_TO_TEST_DATA) + std::string("test_table.hdf5");
+    std::string mapping_loc = std::string(PATH_TO_TEST_DATA) + std::string("test_mapping.bin");
     auto *emulator = new Emulator<unsigned long, 1, 3, 2555297, 8388608>(table_loc, mapping_loc);
     // create 4d data for interpolation
     const double EPS = 1e-12;
@@ -86,7 +86,7 @@ TEST_CASE("Checkpoint solution", "[checkpoint]"){
     if (make_validation_set){
         // make validation set
         std::ofstream myfile;
-        myfile.open ("/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/validation_data.txt");
+        myfile.open (std::string(PATH_TO_TEST_DATA) + std::string("validation_data.txt"));
         for (size_t i = 0; i < NUM_POINTS; i++){
             myfile << std::scientific << std::setprecision(16) << sol[i] << '\n';
         }
@@ -94,7 +94,7 @@ TEST_CASE("Checkpoint solution", "[checkpoint]"){
     } else{
         // check if results are correct
         std::ifstream myfile;
-        myfile.open ("/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/validation_data.txt");
+        myfile.open (std::string(PATH_TO_TEST_DATA) + std::string("validation_data.txt"));
         for (size_t i = 0; i < NUM_POINTS; i++){
     //        double sol_true = x0[i] + x1[i] + x2[i] + 1.0;
     //        REQUIRE(std::fabs(sol[i] - sol_true) < EPS);
@@ -114,8 +114,8 @@ TEST_CASE("Checkpoint solution serial", "[checkpoint:serial]"){
     // Load the emulator
 //#include "test_v2_sparse_cpp_params.h"
 
-    std::string table_loc = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/test_v2_sparse_table.hdf5";
-    std::string mapping_loc = "/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/pthash.bin";
+    std::string table_loc = std::string(PATH_TO_TEST_DATA) + std::string("test_table.hdf5");
+    std::string mapping_loc = std::string(PATH_TO_TEST_DATA) + std::string("test_mapping.bin");
     auto *emulator = new Emulator<unsigned long, 1, 3, 2555297, 8388608>(table_loc, mapping_loc);
     // create 4d data for interpolation
     const double EPS = 1e-12;
@@ -158,7 +158,7 @@ TEST_CASE("Checkpoint solution serial", "[checkpoint:serial]"){
     if (make_validation_set){
         // make validation set
         std::ofstream myfile;
-        myfile.open ("/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/validation_data.txt");
+        myfile.open (std::string(PATH_TO_TEST_DATA) + std::string("validation_data.txt"));
         for (size_t i = 0; i < NUM_POINTS; i++){
             myfile << std::scientific << std::setprecision(16) << sol[i] << '\n';
         }
@@ -166,10 +166,8 @@ TEST_CASE("Checkpoint solution serial", "[checkpoint:serial]"){
     } else{
         // check if results are correct
         std::ifstream myfile;
-        myfile.open ("/home/jared/research/ANL/ND-tree_tabular_data_emulator/cpp_emulator/cmake-build-debug/validation_data.txt");
+        myfile.open (std::string(PATH_TO_TEST_DATA) + std::string("validation_data.txt"));
         for (size_t i = 0; i < NUM_POINTS; i++){
-            //        double sol_true = x0[i] + x1[i] + x2[i] + 1.0;
-            //        REQUIRE(std::fabs(sol[i] - sol_true) < EPS);
             double sol_true = 0;
             std::string word;
             char* pEnd;

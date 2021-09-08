@@ -1,5 +1,5 @@
 # ND-tree_tabular_data_emulator
-A memory efficient emulator for tabular data, i.e. lookup tables, that utilizes an ND-tree domain decomposition. Typical lookup tables save function values at regularly spaced intervals, e.g., linearly-spaced or log-spaced. These tables are then interpolated over during runtime to return an approximation of the function for a given input. Because the point spacing is fixed over the domain this can lead to varying degrees of interpolation accuracy throughout the table's domain.
+A memory efficient emulator for tabular data, i.e. lookup table, that utilizes an ND-tree domain decomposition. Typical lookup tables save function values at regularly spaced intervals, e.g., linearly-spaced or log-spaced. These tables are then interpolated over during runtime to return an approximation of the function for a given input. Because the point spacing is fixed over the domain this can lead to varying degrees of interpolation accuracy throughout the table's domain.
 
 To reduce the variability of interpolation error over the domain and reduce the size of the table, we use an ND-tree decomposition of the domain. An example of this is shown in the below figure, which is taken from the paper outlining this method. The decomposition is done such that the error over the domain is as close to some desired threshold as possible, given the constraint of the input data and type of interpolation performed.
 
@@ -244,6 +244,25 @@ Using the shared library simply requires using the extern calls, as shown above 
 
 For more details see the doc-strings in [cpp_emulator/emulator/emulator.h](cpp_emulator/emulator/emulator.h) and [cpp_emulator/emulator/emulator_externs.cpp](cpp_emulator/emulator/emulator_externs.cpp)
 
-# Unit Tests
+# Test Suite
 There are multiple unit tests in both the python and C++ versions. The C++ tests are very basic, while the python tests are much more in depth. The python tests include building the C++ emulator and comparing its output to the python versions, as to confirm consistency between the two. 
 
+To run the python tests, navigate to the tests folder and run
+```
+pytest
+```
+Many of the tests also have a plot associated with them. This can be helpful when debugging or understanding how things are working. The plots that give the correct output are located in [tests/correct_plots](tests/correct_plots/).
+
+For the C++ tests, you must build the tests and then run it. The C++ tests just tests if the solution has changed since a validation run, which can do by changing `make_validation_set` to true. This allows for a helpful way to debug the C++ code.
+
+First create the test directory using CMake. Starting in the root directory,
+```
+cd cpp_emulator
+mkdir testing
+cd testing
+cmake ..
+cmake --build . --target tests_all
+cd Tests
+./tests_all
+```
+If you want to run the tests in a different directory you will need to modify the `PATH_TO_TEST_DATA` variable in [cpp_emulator/Tests/test_setup.cpp](cpp_emulator/Tests/test_setup.cpp).

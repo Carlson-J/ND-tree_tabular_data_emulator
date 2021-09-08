@@ -46,6 +46,7 @@ def test_2d_convergence(dataset_2d_non_linear):
     plt.ylabel("Error")
     plt.yscale("log")
     plt.legend()
+    plt.savefig("test_convergence_2d.png")
     plt.show()
     # check if error is low
     assert np.all(error <= EPS)
@@ -91,6 +92,7 @@ def test_4d_convergence(dataset_4d_log_non_linear):
     plt.ylabel("Error")
     plt.yscale("log")
     plt.legend()
+    plt.savefig("test_convergence_4d_nonLinear.png")
     plt.show()
     # check if error is low
     assert np.all(l1_error[-1] <= EPS)
