@@ -14,12 +14,7 @@
 #include <algorithm>
 #include <cmath>
 #include <omp.h>
-//#include <morton-nd/mortonND_BMI2.h>
-//#include <morton-nd/mortonND_LUT.h>
-//
-//using MortonND = mortonnd::MortonND;
-#define POINT_CACHE_SIZE 4
-#define CELL_CACHE_SIZE 100
+
 #define INIT_CELL_CACHE_SIZE 128
 
 template <typename indexing_int, size_t num_model_classes, size_t num_dim,
@@ -82,6 +77,12 @@ public:
         }
     }
 
+    /**
+     * Interpolate at a single point.
+     *
+     * @param: point: The point to interpolate at
+     * @param: return_value: the approximate value at the input point
+     */
     void interpolate(const double* point, double& return_value){
         // get thread id
         size_t thread_id = omp_get_thread_num();
@@ -92,6 +93,13 @@ public:
         return_value = nd_linear_interp(point, &(weight_caches.at(thread_id).at(0)));
     }
 
+    /**
+     * Interpolate at a single point, with both the value and derivative along a speceified axis returned.
+     *
+     * @param derivative_dim: the axis to return the derivative along. Should be < num_dims
+     * @param: return_value: the approximate value at the input point
+     * @param: derivative: the approximate value of the derivative along the derivative_dim axis at the input point
+    */
     template<size_t derivative_dim>
     void interpolate(const double* point, double& return_value, double& derivative){
         // get thread id
