@@ -5,9 +5,9 @@ To reduce the variability of interpolation error over the domain and reduce the 
 
 ![Example of domain decomposition.](figures/combined_results_figure.png)
 
-The emulator is built using the python, but there is a python and C++ version of the ND-emulator for calling a built emulator. The C++ version is build for speed and is thread safe. Furthermore, there are python and fortran bindings for the C++ version. To use them, simply build the C++ emulator into a shared library and follow the call the C extern functions in the desired application. Examples of this are outlined below.
+The code to create an emulator from tabular data is written in python, but there is a python and C++ version of the ND-emulator for calling a built emulator. The C++ version is build for speed and is thread safe. Furthermore, there are python and fortran bindings for the C++ version. To use them, simply build the C++ emulator into a shared library and call the C extern functions in the desired application. Examples of this are outlined below.
 
-Different types of interpolation methods are possible and will be chosen on a cell-by-cell basis based on which gives a lower expected error. Currently a nd-linear interpolation in log-space and linear-space are implemented in the python versions, and only the linear-space nd-linear interpolation is available in the c++ version.
+Different types of interpolation methods are possible and will be chosen on a cell-by-cell basis based on which gives a lower expected error. Currently a Lagrange nd-linear interpolation in log-space and linear-space are implemented in the python versions, and only the linear-space Lagrange nd-linear interpolation is available in the c++ version.
 
 ## Initializing the repo
 The emulator uses multiple submodule, which must be loaded when the repo is cloned. Load with
@@ -19,12 +19,15 @@ An example of how the `build_emulator` function is called is shown in the `build
 
 Required python modules:
 ```
-
+numba >=0.53.1
+numpy
+matplotlib
+ctypes
+h5py
 ```
 
 ## Building an Emulator
-In order to create an emulator training data is needed. 
-We store the data in a python dictionary, with the format:
+In order to create an emulator, training data is needed.  We store the data in a python dictionary, with the format:
 ```python
 data = {'f': nd_data_array}
 ```
@@ -48,7 +51,7 @@ from nd_emulator import build_emulator
 emulator = build_emulator(data, max_depth, domain, spacing, error_threshold, model_classes)
 ```
 ### Model classes
-The model class is the type of interpolation used in each cell. Currently only and ND-Linear model class is implemented. You can also specify any transformation to be done before the interpolation is done. The one transformation that is implemented is `'log'`. This transformation takes the data in a cell and shifts it so that it is all positive and then takes the log. The interpolation is then done in this so-called log-space. The results is then transformed back by undoing the log and shift operations. Because this operation is deterministic we don't store the transformed variables but the done transformation when the cell is loaded to avoid increase the memory cost.
+The model class is the type of interpolation used in each cell. Currently only and the Lagrange nd-linear model class is implemented. You can also specify any transformation to be done before the interpolation is done. The one transformation that is implemented is `'log'`. This transformation takes the data in a cell and shifts it so that it is all positive and then takes the log. The interpolation is then done in this so-called log-space. The results is then transformed back by undoing the log and shift operations. Because this operation is deterministic we don't store the transformed variables but do the transformation when the cell is loaded to avoid increase the memory cost.
 
 ## Saving the emulator
 To save the emulator call the save method on Emulator object
@@ -74,11 +77,11 @@ The shared library that is created, name `emulator_name + ".so"`. It has "C" ext
 <emulator_name>_interpolate_single_dx1
 <emulator_name>_free
 ```
-The details on how to call it vary for different language and are shown in the next section. Details on what each function does is detailed in the doc-string in [cpp_emulator/emulator/emulator_externs.cpp](cpp_emulator/emulator/emulator_externs.cpp)
+The details on how to call it vary for different language and are shown in the next section. Details on what each function does is detailed in the doc-strings in [cpp_emulator/emulator/emulator_externs.cpp](cpp_emulator/emulator/emulator_externs.cpp). Note that the header file is copied into the source directory when creating the shared library, so **creating multiple emulators must be done in serial.**
 
 ## Using an Emulator
 ### Python
-Loading an emulator in python is simple. You can either load it directly into python or load a C++ library.
+Loading an emulator in python is simple. You can either load it directly from the hdf5 file into python or load a C++ library.
 
 ```python
 from nd_emulator import EmulatorCpp, load_emulator
@@ -118,7 +121,7 @@ end_py = time()
 dt_py = end_py - start_py
 
 # print speedup
-print(f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py/dt_cpp}\ndiff: L1={np.mean(diff)}, LI={np.max(diff)}")
+print(f"cpp time: {dt_cpp} \npy  time: {dt_py} \npy/cpp : {dt_py/dt_cpp}")
 ```
 The C++ version is ~10x faster than the python version.
 
